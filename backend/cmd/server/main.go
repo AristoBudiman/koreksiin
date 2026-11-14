@@ -137,6 +137,7 @@ func main() {
 
 			guruGroup.POST("/payments/checkout", paymentHandler.Checkout)
 			guruGroup.GET("/payments/transactions", paymentHandler.ListGuruTransactions)
+			guruGroup.POST("/payments/transactions/:id/cancel", paymentHandler.CancelPendingTransaction)
 			guruGroup.POST("/payments/reconcile", paymentHandler.ReconcileGuruTransactions)
 		}
 

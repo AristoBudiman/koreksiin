@@ -12,7 +12,7 @@
               </span>
               <span class="text-[10px] font-semibold text-ink-muted block">Ruang Kerja Guru</span>
             </div>
-            <span class="hidden lg:inline-block px-2 py-0.5 rounded bg-ink-bg dark:bg-ink-darkBg border border-ink-line dark:border-ink-darkLine text-[11px] font-bold text-ink-muted whitespace-nowrap">
+            <span class="hidden 2xl:inline-block px-2 py-0.5 rounded bg-ink-bg dark:bg-ink-darkBg border border-ink-line dark:border-ink-darkLine text-[11px] font-bold text-ink-muted whitespace-nowrap">
               Ruang Kerja Guru
             </span>
           </RouterLink>
@@ -20,53 +20,62 @@
           <nav class="hidden md:flex items-center gap-1 text-xs font-semibold shrink-0">
             <RouterLink
               to="/guru"
+              title="Daftar Tugas"
               exact-active-class="bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300"
               class="px-2.5 py-2 rounded-lg text-ink-muted hover:text-ink dark:hover:text-ink-darkText transition-colors flex items-center gap-1.5 whitespace-nowrap"
             >
               <LayoutDashboard class="w-4 h-4 shrink-0" />
-              <span>Daftar Tugas</span>
+              <span class="hidden xl:inline">Daftar Tugas</span>
             </RouterLink>
             <RouterLink
               to="/guru/tugas/baru"
+              title="Buat Tugas"
               active-class="bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300"
               class="px-2.5 py-2 rounded-lg text-ink-muted hover:text-ink dark:hover:text-ink-darkText transition-colors flex items-center gap-1.5 whitespace-nowrap"
             >
               <PlusCircle class="w-4 h-4 shrink-0" />
-              <span>Buat Tugas</span>
+              <span class="hidden xl:inline">Buat Tugas</span>
             </RouterLink>
             <RouterLink
               to="/guru/model-custom"
+              title="Model Custom"
               active-class="bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300"
               class="px-2.5 py-2 rounded-lg text-ink-muted hover:text-ink dark:hover:text-ink-darkText transition-colors flex items-center gap-1.5 whitespace-nowrap"
             >
               <Sliders class="w-4 h-4 shrink-0" />
-              <span>Model Custom</span>
+              <span class="hidden xl:inline">Model Custom</span>
             </RouterLink>
             <RouterLink
               to="/guru/langganan"
+              title="Langganan & Kuota"
               active-class="bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300"
               class="px-2.5 py-2 rounded-lg text-ink-muted hover:text-ink dark:hover:text-ink-darkText transition-colors flex items-center gap-1.5 whitespace-nowrap"
             >
               <CreditCard class="w-4 h-4 shrink-0" />
-              <span>Langganan &amp; Kuota</span>
+              <span class="hidden xl:inline">Langganan</span>
             </RouterLink>
           </nav>
         </div>
 
         <div class="flex items-center gap-2 sm:gap-2.5 shrink-0">
           <!-- Indikator Kuota Desktop/Tablet -->
-          <div
+          <RouterLink
             v-if="authStore.user?.subscription"
-            class="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-brand-50 dark:bg-brand-900/30 border border-brand-200 dark:border-brand-800 text-xs whitespace-nowrap"
+            to="/guru/langganan"
+            :title="`${authStore.user.subscription.plan_name}: Sisa ${authStore.user.subscription.quota_remaining} / ${authStore.user.subscription.quota_total} esai`"
+            class="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-brand-50 dark:bg-brand-900/30 border border-brand-200 dark:border-brand-800 text-xs whitespace-nowrap hover:border-brand-400 transition-colors"
           >
             <Sparkles class="w-3.5 h-3.5 text-brand-700 dark:text-brand-400 shrink-0" />
             <span class="font-semibold text-ink dark:text-ink-darkText hidden 2xl:inline">
               {{ authStore.user.subscription.plan_name }}:
             </span>
-            <span class="font-extrabold num-tabular text-brand-700 dark:text-brand-300">
-              Sisa {{ authStore.user.subscription.quota_remaining }} / {{ authStore.user.subscription.quota_total }} esai
+            <span class="font-extrabold num-tabular text-brand-700 dark:text-brand-300 xl:hidden">
+              {{ authStore.user.subscription.quota_remaining }}/{{ authStore.user.subscription.quota_total }}
             </span>
-          </div>
+            <span class="font-extrabold num-tabular text-brand-700 dark:text-brand-300 hidden xl:inline">
+              {{ authStore.user.subscription.quota_remaining }} / {{ authStore.user.subscription.quota_total }} esai
+            </span>
+          </RouterLink>
 
           <!-- Indikator Kuota Ponsel -->
           <div
@@ -87,7 +96,7 @@
             <Moon v-else class="w-4 h-4" />
           </button>
 
-          <div class="hidden xl:block text-right whitespace-nowrap">
+          <div class="hidden 2xl:block text-right whitespace-nowrap">
             <p class="text-xs font-bold leading-tight">{{ authStore.user?.name }}</p>
             <p class="text-[11px] text-ink-muted leading-tight">{{ authStore.user?.institution }}</p>
           </div>
@@ -150,6 +159,7 @@
 </template>
 
 <script setup>
+import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   LayoutDashboard,
@@ -176,5 +186,11 @@ function handleLogout() {
   toastStore.show('Anda telah keluar dari sesi.')
   router.push('/masuk')
 }
+
+onMounted(() => {
+  if (authStore.isAuthenticated) {
+    authStore.refreshProfile().catch(() => {})
+  }
+})
 </script>
 

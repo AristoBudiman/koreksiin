@@ -195,7 +195,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
 import {
   Award,
   Sparkles,
@@ -262,7 +262,18 @@ async function handleDelete(item) {
   }
 }
 
+function handleVisibilityRefresh() {
+  if (document.visibilityState === 'visible') {
+    authStore.refreshProfile().catch(() => {})
+  }
+}
+
 onMounted(() => {
   fetchDashboard()
+  document.addEventListener('visibilitychange', handleVisibilityRefresh)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('visibilitychange', handleVisibilityRefresh)
 })
 </script>

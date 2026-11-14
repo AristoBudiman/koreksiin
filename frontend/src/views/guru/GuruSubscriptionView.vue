@@ -9,7 +9,7 @@
           </h1>
         </HandDrawnUnderline>
         <p class="text-xs sm:text-sm text-ink-muted mt-2 max-w-2xl">
-          Kelola kuota penilaian esai siswa dan beli paket prabayar atau kuota tambahan (Add-on) melalui Midtrans Snap (QRIS, GoPay, ShopeePay, Virtual Account Bank, Gerai Retail, &amp; Kartu).
+          Kelola kuota penilaian esai siswa dan beli paket atau kuota tambahan (Add-on). Pembayaran lewat QRIS, e-wallet, transfer bank (Virtual Account), gerai retail, atau kartu.
         </p>
       </div>
 
@@ -99,13 +99,54 @@
       </div>
     </div>
 
-    <!-- Pilihan Paket Prabayar & Add-on -->
+    <!-- Banner Transaksi Menunggu Pembayaran -->
+    <div
+      v-if="pendingTx"
+      class="card-paper p-5 border-2 border-amber-400 dark:border-amber-600 bg-amber-50/70 dark:bg-amber-950/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+    >
+      <div class="space-y-1">
+        <div class="flex items-center gap-2">
+          <Clock class="w-4 h-4 text-amber-700 dark:text-amber-300 shrink-0" />
+          <span class="text-xs font-extrabold uppercase tracking-wider text-amber-800 dark:text-amber-200">
+            Transaksi Menunggu Pembayaran
+          </span>
+        </div>
+        <p class="text-sm font-bold text-ink dark:text-ink-darkText">
+          {{ pendingTx.plan_name }} — {{ formatRupiah(pendingTx.gross_amount) }}
+        </p>
+        <p class="text-xs text-ink-muted">
+          Order ID: <span class="font-mono font-semibold">{{ pendingTx.order_id }}</span>. Selesaikan atau batalkan transaksi ini sebelum membuat pesanan baru.
+        </p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2 shrink-0">
+        <button
+          type="button"
+          class="btn-primary text-xs"
+          @click="openPaymentWindow(pendingTx.snap_token, pendingTx.snap_redirect_url)"
+        >
+          <CreditCard class="w-3.5 h-3.5" />
+          <span>Lanjutkan pembayaran</span>
+        </button>
+        <button
+          type="button"
+          class="btn-secondary text-xs text-red-700 dark:text-red-300 border-red-300 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-950/40"
+          :disabled="cancellingId === pendingTx.id"
+          @click="handleCancelPending(pendingTx)"
+        >
+          <Loader2 v-if="cancellingId === pendingTx.id" class="w-3.5 h-3.5 animate-spin" />
+          <CircleX v-else class="w-3.5 h-3.5" />
+          <span>Batalkan</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Pilihan Paket & Add-on -->
     <div class="space-y-4">
       <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
         <div>
           <h2 class="text-lg font-extrabold tracking-tight">Pilih Paket Langganan atau Add-on Kuota</h2>
           <p class="text-xs text-ink-muted mt-0.5">
-            Pembayaran prabayar via Midtrans Snap Sandbox (QRIS, E-Wallet, Virtual Account Bank, Gerai Retail, atau Kartu). Kuota dan masa aktif diperbarui otomatis setelah pembayaran lunas (settlement).
+            Pembayaran lewat QRIS, e-wallet, transfer bank (Virtual Account), gerai retail, atau kartu. Kuota dan masa aktif diperbarui otomatis setelah pembayaran lunas.
           </p>
         </div>
       </div>
@@ -114,7 +155,7 @@
         <div
           v-for="plan in plans"
           :key="plan.code"
-          class="card-paper p-5 flex flex-col justify-between space-y-5"
+          class="card-paper p-5 flex flex-col justify-between space-y-5 transition-all duration-200 hover:-translate-y-1 hover:border-brand-500 hover:shadow-paperHover"
           :class="plan.code === 'monthly' ? 'border-2 border-brand-500 ring-4 ring-brand-500/10' : ''"
         >
           <div class="space-y-3.5">
@@ -129,7 +170,15 @@
                       : 'bg-ink-bg dark:bg-ink-darkBg border border-ink-line dark:border-ink-darkLine text-ink-muted'
                 "
               >
-                {{ plan.is_addon ? 'Add-on Kuota' : plan.code === 'monthly' ? 'Paling Populer' : 'Paket Prabayar' }}
+                {{
+                  plan.is_addon
+                    ? 'Add-on Kuota'
+                    : plan.code === 'free'
+                      ? 'Gratis'
+                      : plan.code === 'monthly'
+                        ? 'Paling Populer'
+                        : 'Paket Berbayar'
+                }}
               </span>
               <span
                 v-if="sub?.plan_code === plan.code && !plan.is_addon"
@@ -175,24 +224,31 @@
               </li>
               <li class="flex items-center gap-2">
                 <CircleCheck class="w-4 h-4 text-criteria-terpenuhi shrink-0" />
-                <span>Model Custom (Kalibrasi &amp; LoRA)</span>
+                <span>Model custom yang belajar dari gaya menilai Anda</span>
               </li>
             </ul>
           </div>
 
-          <div class="pt-3 border-t border-ink-line dark:border-ink-darkLine">
-            <button
-              v-if="plan.price_idr > 0"
-              type="button"
-              class="w-full"
-              :class="plan.code === 'monthly' ? 'btn-primary' : 'btn-secondary'"
-              :disabled="checkingOutCode === plan.code"
-              @click="handleCheckout(plan)"
-            >
-              <Loader2 v-if="checkingOutCode === plan.code" class="w-4 h-4 animate-spin" />
-              <CreditCard v-else class="w-4 h-4" />
-              <span>{{ plan.is_addon ? 'Beli Add-on Kuota' : 'Beli Paket Ini' }}</span>
-            </button>
+          <div class="pt-3 border-t border-ink-line dark:border-ink-darkLine space-y-2">
+            <template v-if="plan.price_idr > 0">
+              <button
+                type="button"
+                class="w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                :class="plan.code === 'monthly' ? 'btn-primary' : 'btn-secondary'"
+                :disabled="checkingOutCode === plan.code || getPlanActionState(plan).disabled"
+                @click="openCheckoutPreview(plan)"
+              >
+                <Loader2 v-if="checkingOutCode === plan.code" class="w-4 h-4 animate-spin" />
+                <CreditCard v-else class="w-4 h-4" />
+                <span>{{ plan.is_addon ? 'Beli Add-on Kuota' : 'Beli Paket Ini' }}</span>
+              </button>
+              <p
+                v-if="getPlanActionState(plan).reason"
+                class="text-[11px] text-ink-muted leading-snug"
+              >
+                {{ getPlanActionState(plan).reason }}
+              </p>
+            </template>
             <div
               v-else
               class="w-full py-2 px-3 rounded-lg bg-ink-bg dark:bg-ink-darkBg border border-ink-line dark:border-ink-darkLine text-center text-xs font-semibold text-ink-muted"
@@ -213,13 +269,7 @@
             <span>Riwayat Transaksi Pembayaran</span>
           </h2>
           <p class="text-xs text-ink-muted mt-0.5">
-            Daftar pesanan paket dan add-on Anda. Transaksi berstatus <strong>Menunggu Pembayaran</strong> dapat dibuka kembali melalui popup Snap atau tautan pembayaran Midtrans, lalu disimulasikan melalui
-            <a
-              href="https://simulator.sandbox.midtrans.com/v2/qris/index"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="text-brand-700 dark:text-brand-400 underline font-semibold"
-            >Simulator QRIS Midtrans Sandbox (v2)</a>. Jika webhook terlambat masuk, klik <strong>Cek status pembayaran</strong>.
+            Daftar pesanan paket dan add-on Anda. Transaksi berstatus <strong>Menunggu Pembayaran</strong> dapat dilanjutkan atau dibatalkan sebelum membuat pesanan baru. Jika status belum berubah setelah membayar, klik <strong>Cek status pembayaran</strong>.
           </p>
         </div>
 
@@ -287,29 +337,77 @@
               <td class="py-2.5 px-3.5 text-right whitespace-nowrap">
                 <div v-if="tx.status === 'pending'" class="inline-flex items-center gap-1.5">
                   <button
-                    v-if="tx.snap_token"
                     type="button"
                     class="btn-primary py-1 px-2.5 text-xs"
-                    @click="openSnapToken(tx.snap_token, tx.snap_redirect_url)"
+                    @click="openPaymentWindow(tx.snap_token, tx.snap_redirect_url)"
                   >
-                    Bayar (Snap)
+                    Lanjutkan pembayaran
                   </button>
-                  <a
-                    v-if="tx.snap_redirect_url"
-                    :href="tx.snap_redirect_url"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="btn-secondary py-1 px-2.5 text-xs inline-flex items-center gap-1"
+                  <button
+                    type="button"
+                    class="btn-secondary py-1 px-2.5 text-xs text-red-700 dark:text-red-300 border-red-300 dark:border-red-800"
+                    :disabled="cancellingId === tx.id"
+                    @click="handleCancelPending(tx)"
                   >
-                    <span>Link Snap</span>
-                    <ExternalLink class="w-3 h-3" />
-                  </a>
+                    Batalkan
+                  </button>
                 </div>
                 <span v-else class="text-[11px] text-ink-muted">-</span>
               </td>
             </tr>
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- Modal Ringkasan Sebelum Pembayaran -->
+    <div
+      v-if="previewPlan"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      @click.self="previewPlan = null"
+    >
+      <div class="card-paper max-w-md w-full p-6 space-y-5 shadow-2xl">
+        <div class="space-y-1">
+          <h3 class="text-lg font-extrabold tracking-tight">Konfirmasi Pembelian</h3>
+          <p class="text-xs text-ink-muted">
+            Periksa detail paket dan kuota Anda sebelum melanjutkan ke halaman pembayaran.
+          </p>
+        </div>
+
+        <div class="p-4 rounded-xl bg-brand-50/70 dark:bg-brand-900/30 border border-brand-200 dark:border-brand-800 space-y-2 text-xs">
+          <p class="font-bold text-ink dark:text-ink-darkText leading-relaxed">
+            Setelah pembayaran, paket Anda:
+            <span class="text-brand-700 dark:text-brand-300">{{ previewSummary.planName }}</span>,
+            aktif sampai:
+            <span class="text-brand-700 dark:text-brand-300">{{ previewSummary.expiresLabel }}</span>,
+            kuota:
+            <span class="text-brand-700 dark:text-brand-300">{{ previewSummary.quotaRemaining }} esai</span>.
+          </p>
+          <p class="text-ink-muted">
+            Total pembayaran: <strong class="text-ink dark:text-ink-darkText">{{ formatRupiah(previewPlan.price_idr) }}</strong>
+          </p>
+        </div>
+
+        <div class="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            class="btn-secondary text-xs"
+            :disabled="checkingOutCode === previewPlan.code"
+            @click="previewPlan = null"
+          >
+            Batal
+          </button>
+          <button
+            type="button"
+            class="btn-primary text-xs"
+            :disabled="checkingOutCode === previewPlan.code"
+            @click="confirmCheckout"
+          >
+            <Loader2 v-if="checkingOutCode === previewPlan.code" class="w-4 h-4 animate-spin" />
+            <CreditCard v-else class="w-4 h-4" />
+            <span>Lanjutkan ke Pembayaran</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -324,8 +422,7 @@ import {
   Clock,
   CreditCard,
   Loader2,
-  Receipt,
-  ExternalLink
+  Receipt
 } from 'lucide-vue-next'
 import HandDrawnUnderline from '@/components/HandDrawnUnderline.vue'
 import ScoreCircleHighlight from '@/components/ScoreCircleHighlight.vue'
@@ -342,11 +439,77 @@ const transactions = ref([])
 const refreshing = ref(false)
 const reconciling = ref(false)
 const checkingOutCode = ref('')
+const cancellingId = ref(null)
+const previewPlan = ref(null)
 const snapReady = ref(false)
 
 let pollTimer = null
 
 const sub = computed(() => authStore.user?.subscription)
+
+const pendingTx = computed(() => transactions.value.find((t) => t.status === 'pending') || null)
+
+const isPaidActive = computed(() => {
+  if (!sub.value || !sub.value.plan_code || sub.value.plan_code === 'free') return false
+  if (!sub.value.expires_at) return true
+  return new Date(sub.value.expires_at) > new Date()
+})
+
+const previewSummary = computed(() => {
+  const plan = previewPlan.value
+  if (!plan) return { planName: '-', expiresLabel: '-', quotaRemaining: 0 }
+
+  const now = new Date()
+  const curRemaining = Math.max(0, Number(sub.value?.quota_remaining) || 0)
+
+  if (plan.is_addon) {
+    const exp = sub.value?.expires_at ? formatDateTime(sub.value.expires_at) : '-'
+    return {
+      planName: sub.value?.plan_name || plan.name,
+      expiresLabel: exp,
+      quotaRemaining: curRemaining + Number(plan.quota_essays || 0)
+    }
+  }
+
+  let base = now
+  if (isPaidActive.value && sub.value?.expires_at && new Date(sub.value.expires_at) > now) {
+    base = new Date(sub.value.expires_at)
+  }
+  const nextExp = new Date(base.getTime())
+  nextExp.setDate(nextExp.getDate() + Number(plan.duration_days || 0))
+
+  const nextQuota = isPaidActive.value
+    ? curRemaining + Number(plan.quota_essays || 0)
+    : Number(plan.quota_essays || 0)
+
+  return {
+    planName: plan.name,
+    expiresLabel: formatDateTime(nextExp.toISOString()),
+    quotaRemaining: nextQuota
+  }
+})
+
+function getPlanActionState(plan) {
+  if (pendingTx.value) {
+    return {
+      disabled: true,
+      reason: 'Selesaikan atau batalkan transaksi yang menunggu pembayaran terlebih dahulu.'
+    }
+  }
+  if (plan.is_addon && !isPaidActive.value) {
+    return {
+      disabled: true,
+      reason: 'Add-on hanya tersedia saat paket Bulanan atau Tahunan sedang aktif.'
+    }
+  }
+  if (!plan.is_addon && plan.code === 'monthly' && isPaidActive.value && sub.value?.plan_code === 'yearly') {
+    return {
+      disabled: true,
+      reason: 'Paket Sekolah Tahunan masih aktif. Beli Add-on jika kuota kurang.'
+    }
+  }
+  return { disabled: false, reason: '' }
+}
 
 const usagePercent = computed(() => {
   const total = Number(sub.value?.quota_total) || 0
@@ -372,7 +535,7 @@ function formatDateTime(isoStr) {
 }
 
 function formatStatusLabel(st) {
-  if (st === 'settlement' || st === 'capture') return 'Lunas (Settlement)'
+  if (st === 'settlement' || st === 'capture') return 'Lunas'
   if (st === 'pending') return 'Menunggu Pembayaran'
   if (st === 'expire') return 'Kedaluwarsa'
   if (st === 'cancel' || st === 'deny') return 'Dibatalkan'
@@ -478,33 +641,33 @@ async function handleReconcilePayments() {
     if (res.settled_count > 0) {
       toastStore.success(res.message)
     } else {
-      toastStore.show(res.message || 'Status pembayaran telah diperiksa ke Midtrans.')
+      toastStore.show(res.message || 'Status pembayaran telah diperiksa.')
     }
   } catch (err) {
-    toastStore.error(err.message || 'Gagal mengecek status pembayaran ke Midtrans.')
+    toastStore.error(err.message || 'Gagal mengecek status pembayaran.')
   } finally {
     reconciling.value = false
   }
 }
 
-function openSnapToken(token, redirectUrl) {
+function openPaymentWindow(token, redirectUrl) {
   if (window.snap && token) {
     window.snap.pay(token, {
       onSuccess: () => {
-        toastStore.show('Pembayaran dikirim. Menunggu konfirmasi webhook Midtrans...')
-        setTimeout(() => refreshAll(true), 2000)
+        toastStore.show('Pembayaran dikirim. Memperbarui status paket Anda...')
+        setTimeout(() => refreshAll(true, true), 1500)
       },
       onPending: () => {
-        toastStore.show('Transaksi dibuat. Selesaikan pembayaran QRIS/GoPay Anda.')
-        refreshAll(true)
+        toastStore.show('Transaksi dibuat. Selesaikan pembayaran Anda.')
+        refreshAll(true, false)
       },
       onError: () => {
-        toastStore.error('Terjadi kendala pada jendela pembayaran Snap.')
-        refreshAll(true)
+        toastStore.error('Terjadi kendala pada jendela pembayaran.')
+        refreshAll(true, true)
       },
       onClose: () => {
-        toastStore.show('Jendela pembayaran ditutup. Status paket hanya berubah setelah pembayaran terkonfirmasi via webhook.')
-        refreshAll(true)
+        toastStore.show('Jendela pembayaran ditutup. Memeriksa status pembayaran terbaru...')
+        refreshAll(true, true)
       }
     })
   } else if (redirectUrl) {
@@ -512,34 +675,70 @@ function openSnapToken(token, redirectUrl) {
   }
 }
 
-async function handleCheckout(plan) {
+function openCheckoutPreview(plan) {
+  const state = getPlanActionState(plan)
+  if (state.disabled) {
+    toastStore.error(state.reason)
+    return
+  }
+  previewPlan.value = plan
+}
+
+async function confirmCheckout() {
+  if (!previewPlan.value) return
+  const plan = previewPlan.value
   checkingOutCode.value = plan.code
   try {
     const res = await apiFetch('/api/payments/checkout', {
       method: 'POST',
       body: JSON.stringify({ plan_code: plan.code })
     })
+    previewPlan.value = null
     toastStore.success(`Pesanan ${res.order_id} dibuat.`)
-    await refreshAll(true)
-    openSnapToken(res.snap_token, res.snap_redirect_url)
+    await refreshAll(true, false)
+    openPaymentWindow(res.snap_token, res.snap_redirect_url)
   } catch (err) {
-    toastStore.error(err.message || 'Gagal memulai pembayaran Midtrans.')
+    toastStore.error(err.message || 'Gagal memulai pembayaran.')
+    await refreshAll(true, false)
   } finally {
     checkingOutCode.value = ''
   }
 }
 
+async function handleCancelPending(tx) {
+  cancellingId.value = tx.id
+  try {
+    await apiFetch(`/api/payments/transactions/${tx.id}/cancel`, {
+      method: 'POST'
+    })
+    toastStore.success('Transaksi menunggu pembayaran berhasil dibatalkan.')
+    await refreshAll(true, false)
+  } catch (err) {
+    toastStore.error(err.message || 'Gagal membatalkan transaksi.')
+  } finally {
+    cancellingId.value = null
+  }
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState === 'visible') {
+    refreshAll(true, true)
+  }
+}
+
 onMounted(async () => {
   await Promise.all([loadSnapScript(), refreshAll(false, true)])
+  document.addEventListener('visibilitychange', handleVisibilityChange)
   pollTimer = setInterval(() => {
     const hasPending = transactions.value.some((t) => t.status === 'pending')
     if (hasPending) {
-      refreshAll(true, false)
+      refreshAll(true, true)
     }
   }, 5000)
 })
 
 onBeforeUnmount(() => {
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
   if (pollTimer) {
     clearInterval(pollTimer)
     pollTimer = null

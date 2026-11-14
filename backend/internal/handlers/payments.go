@@ -410,7 +410,31 @@ func (h *PaymentHandler) applySettlementTx(
 	planIsAddon bool,
 	effectivePaymentType string,
 ) error {
-	_, err := tx.Exec(ctx, `
+	now := time.Now()
+	curState, freePlan, err := refreshOrExpireSubscription(ctx, tx, dbUserID, now)
+	if err != nil {
+		return err
+	}
+
+	var targetPlan PlanSpec
+	err = tx.QueryRow(ctx, `
+		SELECT id, code, name, quota_essays, duration_days, is_addon, price_idr
+		FROM plans
+		WHERE id = $1
+	`, dbPlanID).Scan(
+		&targetPlan.ID, &targetPlan.Code, &targetPlan.Name,
+		&targetPlan.QuotaEssays, &targetPlan.DurationDays, &targetPlan.IsAddon, &targetPlan.PriceIDR,
+	)
+	if err != nil {
+		return err
+	}
+
+	outcome, err := EvaluateSubscriptionPurchase(curState, targetPlan, freePlan, false, now)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(ctx, `
 		UPDATE payment_transactions
 		SET status = 'settlement',
 		    payment_type = $1,
@@ -422,48 +446,44 @@ func (h *PaymentHandler) applySettlementTx(
 		return err
 	}
 
-	if planIsAddon {
-		_, err = tx.Exec(ctx, `
-			UPDATE subscriptions
-			SET quota_total = quota_total + $1,
-			    updated_at = NOW()
-			WHERE user_id = $2
-		`, planQuotaEssays, dbUserID)
-		return err
-	}
-
-	var curPlanCode string
-	var curRemaining int
-	var curExpiresAt *time.Time
-	_ = tx.QueryRow(ctx, `
-		SELECT p.code, GREATEST(s.quota_total - s.quota_used, 0), s.expires_at
-		FROM subscriptions s
-		JOIN plans p ON p.id = s.plan_id
-		WHERE s.user_id = $1
-	`, dbUserID).Scan(&curPlanCode, &curRemaining, &curExpiresAt)
-
-	newQuotaTotal := planQuotaEssays
-	if curPlanCode != "" && curPlanCode != "free" && curRemaining > 0 {
-		newQuotaTotal = curRemaining + planQuotaEssays
-	}
-
-	baseTime := time.Now()
-	if curExpiresAt != nil && curExpiresAt.After(baseTime) {
-		baseTime = *curExpiresAt
-	}
-	newExpiresAt := baseTime.AddDate(0, 0, planDurationDays)
-
 	_, err = tx.Exec(ctx, `
 		UPDATE subscriptions
 		SET plan_id = $1,
 		    quota_total = $2,
-		    quota_used = 0,
+		    quota_used = $3,
 		    quota_reset_at = NULL,
-		    expires_at = $3,
+		    expires_at = $4,
 		    updated_at = NOW()
-		WHERE user_id = $4
-	`, dbPlanID, newQuotaTotal, newExpiresAt, dbUserID)
+		WHERE user_id = $5
+	`, outcome.NewPlanID, outcome.NewQuotaTotal, outcome.NewQuotaUsed, outcome.NewExpiresAt, dbUserID)
 	return err
+}
+
+func (h *PaymentHandler) CancelPendingTransaction(c *gin.Context) {
+	userID := c.GetInt64("user_id")
+	txID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || txID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID transaksi tidak valid."})
+		return
+	}
+
+	ctx := c.Request.Context()
+	tag, err := h.pool.Exec(ctx, `
+		UPDATE payment_transactions
+		SET status = 'cancel',
+		    updated_at = NOW()
+		WHERE id = $1 AND user_id = $2 AND status = 'pending'
+	`, txID, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membatalkan transaksi."})
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Transaksi pending tidak ditemukan atau sudah diproses."})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Transaksi pending berhasil dibatalkan."})
 }
 
 func (h *PaymentHandler) Checkout(c *gin.Context) {
@@ -483,26 +503,60 @@ func (h *PaymentHandler) Checkout(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
-	var planID int64
-	var planCode, planName string
-	var priceIDR, quotaEssays, durationDays int
-	var isAddon bool
+	var targetPlan PlanSpec
 	err := h.pool.QueryRow(ctx, `
 		SELECT id, code, name, price_idr, quota_essays, duration_days, is_addon
 		FROM plans
 		WHERE code = $1 AND is_active = TRUE
 	`, strings.TrimSpace(req.PlanCode)).Scan(
-		&planID, &planCode, &planName, &priceIDR, &quotaEssays, &durationDays, &isAddon,
+		&targetPlan.ID, &targetPlan.Code, &targetPlan.Name, &targetPlan.PriceIDR, &targetPlan.QuotaEssays, &targetPlan.DurationDays, &targetPlan.IsAddon,
 	)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Paket langganan tidak ditemukan atau sedang tidak aktif."})
 		return
 	}
 
-	if priceIDR <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Paket Gratis tidak memerlukan transaksi pembayaran."})
+	// Cek transaksi pending yang masih aktif
+	var pendingTx TransactionItem
+	pendingErr := h.pool.QueryRow(ctx, `
+		SELECT
+			pt.id, pt.order_id, pt.plan_id, p.code, p.name, p.quota_essays, p.is_addon,
+			pt.gross_amount, pt.snap_token, pt.snap_redirect_url,
+			pt.status, COALESCE(pt.payment_type, ''), pt.paid_at, pt.created_at
+		FROM payment_transactions pt
+		JOIN plans p ON p.id = pt.plan_id
+		WHERE pt.user_id = $1 AND pt.status = 'pending'
+		ORDER BY pt.created_at DESC
+		LIMIT 1
+	`, userID).Scan(
+		&pendingTx.ID, &pendingTx.OrderID, &pendingTx.PlanID, &pendingTx.PlanCode, &pendingTx.PlanName, &pendingTx.QuotaEssays, &pendingTx.IsAddon,
+		&pendingTx.GrossAmount, &pendingTx.SnapToken, &pendingTx.SnapRedirectURL,
+		&pendingTx.Status, &pendingTx.PaymentType, &pendingTx.PaidAt, &pendingTx.CreatedAt,
+	)
+	if pendingErr == nil {
+		c.JSON(http.StatusConflict, gin.H{
+			"error":               "Anda masih memiliki transaksi yang menunggu pembayaran. Silakan lanjutkan atau batalkan transaksi tersebut terlebih dahulu.",
+			"pending_transaction": pendingTx,
+		})
 		return
 	}
+
+	now := time.Now()
+	curState, freePlan, err := refreshOrExpireSubscription(ctx, h.pool, userID, now)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat data langganan Anda."})
+		return
+	}
+
+	if _, err := EvaluateSubscriptionPurchase(curState, targetPlan, freePlan, false, now); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	planID := targetPlan.ID
+	planCode := targetPlan.Code
+	planName := targetPlan.Name
+	priceIDR := targetPlan.PriceIDR
 
 	var userName, userEmail string
 	err = h.pool.QueryRow(ctx, `

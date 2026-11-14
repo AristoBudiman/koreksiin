@@ -899,16 +899,8 @@ func (h *AssignmentHandler) EnqueueScoringJob(c *gin.Context) {
 		return
 	}
 
-	// Cek langganan & reset bulanan bila Free Plan
-	var planCode string
-	var planQuota, quotaTotal, quotaUsed int
-	var quotaResetAt, expiresAt *time.Time
-	err = h.pool.QueryRow(ctx, `
-		SELECT p.code, p.quota_essays, s.quota_total, s.quota_used, s.quota_reset_at, s.expires_at
-		FROM subscriptions s
-		JOIN plans p ON p.id = s.plan_id
-		WHERE s.user_id = $1
-	`, userID).Scan(&planCode, &planQuota, &quotaTotal, &quotaUsed, &quotaResetAt, &expiresAt)
+	// Cek langganan (otomatis kembali ke Paket Gratis jika paket berbayar kedaluwarsa, atau reset bulanan Free)
+	subState, _, err := refreshOrExpireSubscription(ctx, h.pool, userID, time.Now())
 	if err != nil {
 		c.JSON(http.StatusForbidden, gin.H{
 			"error":          "Data langganan tidak ditemukan.",
@@ -917,27 +909,7 @@ func (h *AssignmentHandler) EnqueueScoringJob(c *gin.Context) {
 		return
 	}
 
-	now := time.Now()
-	if planCode == "free" && quotaResetAt != nil && now.After(*quotaResetAt) {
-		nextReset := now.AddDate(0, 1, 0)
-		_, _ = h.pool.Exec(ctx, `
-			UPDATE subscriptions
-			SET quota_used = 0, quota_total = $1, quota_reset_at = $2, updated_at = NOW()
-			WHERE user_id = $3
-		`, planQuota, nextReset, userID)
-		quotaUsed = 0
-		quotaTotal = planQuota
-	}
-
-	if planCode != "free" && expiresAt != nil && now.After(*expiresAt) {
-		c.JSON(http.StatusPaymentRequired, gin.H{
-			"error":          "Masa aktif paket langganan Anda telah berakhir. Silakan perpanjang paket di halaman Langganan.",
-			"quota_exceeded": true,
-		})
-		return
-	}
-
-	remaining := quotaTotal - quotaUsed
+	remaining := subState.QuotaTotal - subState.QuotaUsed
 	if unchargedCount > remaining {
 		c.JSON(http.StatusPaymentRequired, gin.H{
 			"error": fmt.Sprintf(

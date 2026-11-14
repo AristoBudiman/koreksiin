@@ -278,39 +278,23 @@ func (h *AuthHandler) PublicPlans(c *gin.Context) {
 }
 
 func (h *AuthHandler) getOrRefreshSubscription(ctx context.Context, userID int64) (*SubscriptionSummary, error) {
-	var sub SubscriptionSummary
-	var planQuota int
-	err := h.pool.QueryRow(ctx, `
-		SELECT p.code, p.name, p.quota_essays, s.quota_total, s.quota_used, s.quota_reset_at, s.expires_at
-		FROM subscriptions s
-		JOIN plans p ON p.id = s.plan_id
-		WHERE s.user_id = $1
-	`, userID).Scan(
-		&sub.PlanCode, &sub.PlanName, &planQuota, &sub.QuotaTotal, &sub.QuotaUsed, &sub.QuotaResetAt, &sub.ExpiresAt,
-	)
+	state, _, err := refreshOrExpireSubscription(ctx, h.pool, userID, time.Now())
 	if err != nil {
 		return nil, err
 	}
 
-	now := time.Now()
-	// Jika paket Free dan sudah melewati quota_reset_at, reset bulanan otomatis
-	if sub.PlanCode == "free" && sub.QuotaResetAt != nil && now.After(*sub.QuotaResetAt) {
-		nextReset := now.AddDate(0, 1, 0)
-		_, _ = h.pool.Exec(ctx, `
-			UPDATE subscriptions
-			SET quota_used = 0, quota_total = $1, quota_reset_at = $2, updated_at = NOW()
-			WHERE user_id = $3
-		`, planQuota, nextReset, userID)
-		sub.QuotaUsed = 0
-		sub.QuotaTotal = planQuota
-		sub.QuotaResetAt = &nextReset
-	}
-
-	rem := sub.QuotaTotal - sub.QuotaUsed
+	rem := state.QuotaTotal - state.QuotaUsed
 	if rem < 0 {
 		rem = 0
 	}
-	sub.QuotaRemaining = rem
-	return &sub, nil
+	return &SubscriptionSummary{
+		PlanCode:       state.PlanCode,
+		PlanName:       state.PlanName,
+		QuotaTotal:     state.QuotaTotal,
+		QuotaUsed:      state.QuotaUsed,
+		QuotaRemaining: rem,
+		QuotaResetAt:   state.QuotaResetAt,
+		ExpiresAt:      state.ExpiresAt,
+	}, nil
 }
 
