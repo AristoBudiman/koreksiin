@@ -6,6 +6,9 @@ import RegisterView from '@/views/RegisterView.vue'
 import GuruLayout from '@/layouts/GuruLayout.vue'
 import AdminLayout from '@/layouts/AdminLayout.vue'
 import GuruDashboardView from '@/views/guru/GuruDashboardView.vue'
+import AssignmentFormView from '@/views/guru/AssignmentFormView.vue'
+import AssignmentDetailView from '@/views/guru/AssignmentDetailView.vue'
+import GuruSubscriptionView from '@/views/guru/GuruSubscriptionView.vue'
 import AdminDashboardView from '@/views/admin/AdminDashboardView.vue'
 
 const router = createRouter({
@@ -37,6 +40,26 @@ const router = createRouter({
           path: '',
           name: 'guru-dashboard',
           component: GuruDashboardView
+        },
+        {
+          path: 'tugas/baru',
+          name: 'guru-assignment-create',
+          component: AssignmentFormView
+        },
+        {
+          path: 'tugas/:id',
+          name: 'guru-assignment-detail',
+          component: AssignmentDetailView
+        },
+        {
+          path: 'tugas/:id/edit',
+          name: 'guru-assignment-edit',
+          component: AssignmentFormView
+        },
+        {
+          path: 'langganan',
+          name: 'guru-subscription',
+          component: GuruSubscriptionView
         }
       ]
     },
@@ -80,4 +103,3 @@ router.beforeEach(async (to) => {
 })
 
 export default router
-

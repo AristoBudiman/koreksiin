@@ -86,6 +86,13 @@ func Run(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config) error {
 		return err
 	}
 
+	// Sinkronkan nilai ai_settings jika masih bernilai default awal (0.72 / 0.52)
+	_, _ = pool.Exec(ctx, `
+		UPDATE ai_settings
+		SET t_high = $1, t_low = $2, s_sem = $3, s_lex = $4, updated_at = NOW()
+		WHERE id = 1 AND t_high = 0.72 AND t_low = 0.52
+	`, cfg.DefaultTHigh, cfg.DefaultTLow, cfg.DefaultSSem, cfg.DefaultSLex)
+
 	// 3. Seed Akun Admin dari .env (JANGAN membuat akun guru dummy)
 	adminEmail := strings.ToLower(strings.TrimSpace(cfg.AdminEmail))
 	if adminEmail != "" && cfg.AdminPassword != "" {

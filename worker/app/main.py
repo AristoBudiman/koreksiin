@@ -36,7 +36,10 @@ def main():
             print(f"[{Config.WORKER_ROLE}] Menunggu Redis ({attempt}/15): {exc}", flush=True)
             time.sleep(1.5)
 
-    # Simpan heartbeat awal di Redis
+    if Config.WORKER_ROLE == "scoring":
+        from app.scorer import EmbeddingEngine
+        EmbeddingEngine.get_instance()
+
     r.set(f"worker:heartbeat:{Config.WORKER_ROLE}", str(int(time.time())))
     print(
         f"[{Config.WORKER_ROLE.upper()}] Siap mendengarkan antrian '{Config.WORKER_QUEUE}' "
@@ -53,6 +56,14 @@ def main():
             _, raw_payload = item
             payload = json.loads(raw_payload)
             print(f"[{Config.WORKER_ROLE.upper()}] Menerima job: {payload}", flush=True)
+
+            job_type = payload.get("type", Config.WORKER_ROLE)
+            if job_type == "scoring" or Config.WORKER_ROLE == "scoring":
+                from app.scoring_job import process_scoring_job
+                process_scoring_job(r, payload)
+            elif job_type == "training" or Config.WORKER_ROLE == "training":
+                from app.trainer import process_training_job
+                process_training_job(r, payload)
         except Exception as exc:
             print(f"[{Config.WORKER_ROLE.upper()}] Error pada loop utama: {exc}", flush=True)
             time.sleep(2)
@@ -63,4 +74,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

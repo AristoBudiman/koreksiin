@@ -53,6 +53,7 @@ func main() {
 	r := gin.Default()
 
 	authHandler := handlers.NewAuthHandler(pool, cfg)
+	assignmentHandler := handlers.NewAssignmentHandler(pool, rdb, cfg)
 
 	api := r.Group("/api")
 	{
@@ -72,12 +73,34 @@ func main() {
 		})
 
 		api.GET("/plans", authHandler.PublicPlans)
+		api.GET("/templates/excel", assignmentHandler.DownloadTemplate)
 
 		authGroup := api.Group("/auth")
 		{
 			authGroup.POST("/register", authHandler.Register)
 			authGroup.POST("/login", authHandler.Login)
 			authGroup.GET("/me", middleware.AuthRequired(cfg.JWTSecret), authHandler.Me)
+		}
+
+		guruGroup := api.Group("")
+		guruGroup.Use(middleware.AuthRequired(cfg.JWTSecret), middleware.RequireRole("guru"))
+		{
+			guruGroup.GET("/guru/stats", assignmentHandler.GuruStats)
+			guruGroup.GET("/assignments", assignmentHandler.List)
+			guruGroup.POST("/assignments", assignmentHandler.Create)
+			guruGroup.GET("/assignments/:id", assignmentHandler.GetDetail)
+			guruGroup.PUT("/assignments/:id", assignmentHandler.Update)
+			guruGroup.DELETE("/assignments/:id", assignmentHandler.Delete)
+
+			guruGroup.POST("/assignments/:id/submissions/manual", assignmentHandler.AddManualSubmissions)
+			guruGroup.POST("/assignments/:id/submissions/excel", assignmentHandler.UploadExcelSubmissions)
+			guruGroup.POST("/assignments/:id/score", assignmentHandler.EnqueueScoringJob)
+			guruGroup.GET("/assignments/:id/export", assignmentHandler.ExportResultsExcel)
+
+			guruGroup.DELETE("/submissions/:subId", assignmentHandler.DeleteSubmission)
+			guruGroup.PUT("/submissions/:subId/revise-score", assignmentHandler.ReviseSubmissionScore)
+
+			guruGroup.GET("/jobs/:id", assignmentHandler.GetJobStatus)
 		}
 	}
 
@@ -87,4 +110,3 @@ func main() {
 		log.Fatalf("[Fatal] Gagal menjalankan server HTTP: %v", err)
 	}
 }
-

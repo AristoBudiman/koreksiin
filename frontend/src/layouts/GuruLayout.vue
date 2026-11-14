@@ -23,7 +23,23 @@
               class="px-3.5 py-2 rounded-lg text-ink-muted hover:text-ink dark:hover:text-ink-darkText transition-colors flex items-center gap-2"
             >
               <LayoutDashboard class="w-4 h-4" />
-              <span>Ringkasan</span>
+              <span>Daftar Tugas</span>
+            </RouterLink>
+            <RouterLink
+              to="/guru/tugas/baru"
+              active-class="bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300"
+              class="px-3.5 py-2 rounded-lg text-ink-muted hover:text-ink dark:hover:text-ink-darkText transition-colors flex items-center gap-2"
+            >
+              <PlusCircle class="w-4 h-4" />
+              <span>Buat Tugas</span>
+            </RouterLink>
+            <RouterLink
+              to="/guru/langganan"
+              active-class="bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300"
+              class="px-3.5 py-2 rounded-lg text-ink-muted hover:text-ink dark:hover:text-ink-darkText transition-colors flex items-center gap-2"
+            >
+              <CreditCard class="w-4 h-4" />
+              <span>Langganan &amp; Kuota</span>
             </RouterLink>
           </nav>
         </div>
@@ -82,6 +98,8 @@ import { useRouter } from 'vue-router'
 import {
   PenTool,
   LayoutDashboard,
+  PlusCircle,
+  CreditCard,
   Sparkles,
   LogOut,
   Sun,
