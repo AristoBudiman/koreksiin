@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  .num-tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  .card-paper {
+    @apply bg-ink-card dark:bg-ink-darkCard border border-ink-line dark:border-ink-darkLine rounded-xl shadow-paper transition-shadow duration-200;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-brand-500 text-white font-bold text-sm transition-all duration-150 hover:bg-brand-600 active:bg-brand-700 active:scale-[0.98] disabled:opacity-60 disabled:pointer-events-none;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-ink-line dark:border-ink-darkLine bg-ink-card dark:bg-ink-darkCard text-ink dark:text-ink-darkText font-semibold text-sm transition-all duration-150 hover:border-brand-400 hover:bg-brand-50/50 dark:hover:bg-ink-darkLine active:scale-[0.98] disabled:opacity-60 disabled:pointer-events-none;
+  }
+
+  .input-field {
+    @apply w-full px-3.5 py-2.5 rounded-lg border border-ink-line dark:border-ink-darkLine bg-white dark:bg-ink-darkBg text-ink dark:text-ink-darkText text-sm placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 transition-colors;
+  }
+}
+
+/* Transisi Halaman */
+.page-fade-enter-active,
+.page-fade-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.page-fade-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.page-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+/* Hormati prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+

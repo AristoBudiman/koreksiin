@@ -1,0 +1,51 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Data and storage volumes
+storage/
+data/
+pg_data/
+redis_data/
+
+# Hugging Face model cache
+hf_cache/
+.cache/
+models_cache/
+
+# Node / Frontend
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+.vite/
+
+# Python / Worker
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+*.egg-info/
+
+# Go / Backend
+backend/bin/
+backend/tmp/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# OS & Editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+

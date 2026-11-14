@@ -1,0 +1,152 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: koreksiin-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-koreksiin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-koreksiin_secret_db_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-koreksiin_db}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-koreksiin} -d ${POSTGRES_DB:-koreksiin_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - koreksiin_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: koreksiin-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - koreksiin_net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: koreksiin-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      BACKEND_PORT: ${BACKEND_PORT:-8000}
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      SCORING_QUEUE: ${SCORING_QUEUE:-queue:scoring}
+      TRAINING_QUEUE: ${TRAINING_QUEUE:-queue:training}
+      STORAGE_DIR: ${STORAGE_DIR:-/storage}
+    volumes:
+      - storage:/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - koreksiin_net
+
+  worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    image: koreksiin-worker:latest
+    container_name: koreksiin-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      WORKER_ROLE: scoring
+      WORKER_QUEUE: ${SCORING_QUEUE:-queue:scoring}
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      HF_HOME: ${HF_HOME:-/hf_cache}
+      STORAGE_DIR: ${STORAGE_DIR:-/storage}
+    volumes:
+      - storage:/storage
+      - hf_cache:/hf_cache
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    networks:
+      - koreksiin_net
+
+  trainer:
+    image: koreksiin-worker:latest
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    container_name: koreksiin-trainer
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      WORKER_ROLE: training
+      WORKER_QUEUE: ${TRAINING_QUEUE:-queue:training}
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      HF_HOME: ${HF_HOME:-/hf_cache}
+      STORAGE_DIR: ${STORAGE_DIR:-/storage}
+    volumes:
+      - storage:/storage
+      - hf_cache:/hf_cache
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    networks:
+      - koreksiin_net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: koreksiin-frontend
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:80"
+    depends_on:
+      - backend
+    networks:
+      - koreksiin_net
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: koreksiin-tunnel
+    restart: unless-stopped
+    profiles:
+      - tunnel
+    command: tunnel --no-autoupdate --url http://frontend:80
+    depends_on:
+      - frontend
+    networks:
+      - koreksiin_net
+
+volumes:
+  pg_data:
+  redis_data:
+  storage:
+  hf_cache:
+
+networks:
+  koreksiin_net:
+    driver: bridge
+
