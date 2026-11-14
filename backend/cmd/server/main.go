@@ -96,6 +96,7 @@ func main() {
 			guruGroup.POST("/assignments/:id/submissions/excel", assignmentHandler.UploadExcelSubmissions)
 			guruGroup.POST("/assignments/:id/score", assignmentHandler.EnqueueScoringJob)
 			guruGroup.GET("/assignments/:id/export", assignmentHandler.ExportResultsExcel)
+			guruGroup.GET("/assignments/:id/training-samples", assignmentHandler.ListTrainingSamples)
 
 			guruGroup.DELETE("/submissions/:subId", assignmentHandler.DeleteSubmission)
 			guruGroup.PUT("/submissions/:subId/revise-score", assignmentHandler.ReviseSubmissionScore)

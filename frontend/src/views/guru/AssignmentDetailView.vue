@@ -97,7 +97,7 @@
           </div>
 
           <!-- Statistik Ringkas Tugas -->
-          <div class="grid grid-cols-3 gap-3 sm:w-auto shrink-0">
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:w-auto shrink-0">
             <div class="p-3.5 rounded-xl bg-ink-bg dark:bg-ink-darkBg border border-ink-line dark:border-ink-darkLine text-center">
               <span class="text-[11px] font-bold uppercase text-ink-muted block">Siswa</span>
               <span class="text-xl sm:text-2xl font-extrabold num-tabular mt-1 block">
@@ -128,6 +128,14 @@
                 {{ similarityFlags.length }}
               </span>
               <span class="text-[11px] text-ink-muted">pasangan</span>
+            </div>
+
+            <div class="p-3.5 rounded-xl bg-ink-bg dark:bg-ink-darkBg border border-ink-line dark:border-ink-darkLine text-center">
+              <span class="text-[11px] font-bold uppercase text-ink-muted block">Data Latih</span>
+              <span class="text-xl sm:text-2xl font-extrabold num-tabular mt-1 block text-brand-700 dark:text-brand-400">
+                {{ assignment.training_sample_count || 0 }}
+              </span>
+              <span class="text-[11px] text-ink-muted">sampel revisi</span>
             </div>
           </div>
         </div>
@@ -605,6 +613,20 @@
                       </span>
                       "{{ cs.matched_snippet }}"
                     </div>
+
+                    <div
+                      v-if="cs.missing_key_points?.length && cs.status !== 'terpenuhi'"
+                      class="p-2.5 rounded-lg bg-brand-50/50 dark:bg-brand-950/30 border border-brand-200/70 dark:border-brand-800/60 text-xs space-y-1"
+                    >
+                      <span class="font-bold text-brand-700 dark:text-brand-300 block">
+                        {{ cs.status === 'sebagian' ? 'Poin kunci yang belum disebut siswa:' : 'Poin kunci yang seharusnya disebut siswa:' }}
+                      </span>
+                      <ul class="list-disc pl-4 space-y-0.5 text-ink-muted">
+                        <li v-for="(mp, mIdx) in cs.missing_key_points" :key="mIdx">
+                          {{ mp }}
+                        </li>
+                      </ul>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -650,13 +672,31 @@
             </div>
 
             <div class="grid sm:grid-cols-2 gap-4 text-xs">
-              <div class="p-3.5 rounded-lg bg-ink-bg dark:bg-ink-darkBg border border-ink-line dark:border-ink-darkLine space-y-1">
-                <span class="font-bold text-ink dark:text-ink-darkText block">{{ sf.student_a_name }}</span>
-                <p class="text-ink-muted leading-relaxed">{{ sf.student_a_text }}</p>
+              <div class="p-3.5 rounded-lg bg-ink-bg dark:bg-ink-darkBg border border-ink-line dark:border-ink-darkLine space-y-2 flex flex-col justify-between">
+                <div class="space-y-1">
+                  <span class="font-bold text-ink dark:text-ink-darkText block">{{ sf.student_a_name }}</span>
+                  <p class="text-ink-muted leading-relaxed">{{ sf.student_a_text }}</p>
+                </div>
+                <button
+                  type="button"
+                  class="text-xs font-bold text-brand-700 dark:text-brand-400 hover:underline self-start"
+                  @click="jumpToSubmission(sf.submission_a_id)"
+                >
+                  Lihat Detail &amp; Revisi Nilai {{ sf.student_a_name }}
+                </button>
               </div>
-              <div class="p-3.5 rounded-lg bg-ink-bg dark:bg-ink-darkBg border border-ink-line dark:border-ink-darkLine space-y-1">
-                <span class="font-bold text-ink dark:text-ink-darkText block">{{ sf.student_b_name }}</span>
-                <p class="text-ink-muted leading-relaxed">{{ sf.student_b_text }}</p>
+              <div class="p-3.5 rounded-lg bg-ink-bg dark:bg-ink-darkBg border border-ink-line dark:border-ink-darkLine space-y-2 flex flex-col justify-between">
+                <div class="space-y-1">
+                  <span class="font-bold text-ink dark:text-ink-darkText block">{{ sf.student_b_name }}</span>
+                  <p class="text-ink-muted leading-relaxed">{{ sf.student_b_text }}</p>
+                </div>
+                <button
+                  type="button"
+                  class="text-xs font-bold text-brand-700 dark:text-brand-400 hover:underline self-start"
+                  @click="jumpToSubmission(sf.submission_b_id)"
+                >
+                  Lihat Detail &amp; Revisi Nilai {{ sf.student_b_name }}
+                </button>
               </div>
             </div>
           </div>
@@ -808,6 +848,14 @@ function statusBadgeClass(st) {
 function selectSubmission(sub) {
   selectedSubmission.value = sub
   reviseInput.value = sub.final_score !== null ? Number(sub.final_score) : 0
+}
+
+function jumpToSubmission(subId) {
+  const found = submissions.value.find((s) => s.id === subId)
+  if (found) {
+    selectSubmission(found)
+    activeTab.value = 'hasil'
+  }
 }
 
 async function fetchDetail(keepTab = false) {

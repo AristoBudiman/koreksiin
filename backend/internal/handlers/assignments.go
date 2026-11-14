@@ -53,21 +53,22 @@ type CriterionResponse struct {
 }
 
 type AssignmentSummary struct {
-	ID              int64     `json:"id"`
-	Title           string    `json:"title"`
-	Subject         string    `json:"subject"`
-	QuestionText    string    `json:"question_text"`
-	MaxScore        float64   `json:"max_score"`
-	ModelType       string    `json:"model_type"`
-	CustomModelID   *int64    `json:"custom_model_id"`
-	CustomModelName string    `json:"custom_model_name,omitempty"`
-	CriteriaCount   int       `json:"criteria_count"`
-	SubmissionCount int       `json:"submission_count"`
-	ScoredCount     int       `json:"scored_count"`
-	SimilarityCount int       `json:"similarity_count"`
-	AverageScore    *float64  `json:"average_score"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ID                  int64     `json:"id"`
+	Title               string    `json:"title"`
+	Subject             string    `json:"subject"`
+	QuestionText        string    `json:"question_text"`
+	MaxScore            float64   `json:"max_score"`
+	ModelType           string    `json:"model_type"`
+	CustomModelID       *int64    `json:"custom_model_id"`
+	CustomModelName     string    `json:"custom_model_name,omitempty"`
+	CriteriaCount       int       `json:"criteria_count"`
+	SubmissionCount     int       `json:"submission_count"`
+	ScoredCount         int       `json:"scored_count"`
+	SimilarityCount     int       `json:"similarity_count"`
+	TrainingSampleCount int       `json:"training_sample_count"`
+	AverageScore        *float64  `json:"average_score"`
+	CreatedAt           time.Time `json:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at"`
 }
 
 func (h *AssignmentHandler) List(c *gin.Context) {
@@ -82,6 +83,7 @@ func (h *AssignmentHandler) List(c *gin.Context) {
 			(SELECT COUNT(*) FROM submissions s WHERE s.assignment_id = a.id) AS submission_count,
 			(SELECT COUNT(*) FROM submissions s WHERE s.assignment_id = a.id AND s.status = 'scored') AS scored_count,
 			(SELECT COUNT(*) FROM similarity_flags sf WHERE sf.assignment_id = a.id) AS similarity_count,
+			(SELECT COUNT(*) FROM training_samples ts WHERE ts.assignment_id = a.id) AS training_sample_count,
 			(SELECT AVG(s.final_score) FROM submissions s WHERE s.assignment_id = a.id AND s.status = 'scored') AS avg_score,
 			a.created_at, a.updated_at
 		FROM assignments a
@@ -102,7 +104,8 @@ func (h *AssignmentHandler) List(c *gin.Context) {
 			&item.ID, &item.Title, &item.Subject, &item.QuestionText, &item.MaxScore,
 			&item.ModelType, &item.CustomModelID, &item.CustomModelName,
 			&item.CriteriaCount, &item.SubmissionCount, &item.ScoredCount,
-			&item.SimilarityCount, &item.AverageScore, &item.CreatedAt, &item.UpdatedAt,
+			&item.SimilarityCount, &item.TrainingSampleCount, &item.AverageScore,
+			&item.CreatedAt, &item.UpdatedAt,
 		); err == nil {
 			assignments = append(assignments, item)
 		}
@@ -289,6 +292,7 @@ func (h *AssignmentHandler) GetDetail(c *gin.Context) {
 		SELECT
 			a.id, a.title, a.subject, a.question_text, a.max_score,
 			a.model_type, a.custom_model_id, COALESCE(cm.name, ''),
+			(SELECT COUNT(*) FROM training_samples ts WHERE ts.assignment_id = a.id) AS training_sample_count,
 			a.created_at, a.updated_at
 		FROM assignments a
 		LEFT JOIN custom_models cm ON cm.id = a.custom_model_id
@@ -296,7 +300,8 @@ func (h *AssignmentHandler) GetDetail(c *gin.Context) {
 	`, assignmentID, userID).Scan(
 		&assignment.ID, &assignment.Title, &assignment.Subject, &assignment.QuestionText,
 		&assignment.MaxScore, &assignment.ModelType, &assignment.CustomModelID,
-		&assignment.CustomModelName, &assignment.CreatedAt, &assignment.UpdatedAt,
+		&assignment.CustomModelName, &assignment.TrainingSampleCount,
+		&assignment.CreatedAt, &assignment.UpdatedAt,
 	)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Tugas tidak ditemukan."})
@@ -429,22 +434,23 @@ func (h *AssignmentHandler) GetDetail(c *gin.Context) {
 
 	// Ambil pasangan siswa yang terindikasi mirip
 	type SimilarityFlagItem struct {
-		ID            int64   `json:"id"`
-		SubmissionAID int64   `json:"submission_a_id"`
-		StudentAName  string  `json:"student_a_name"`
-		StudentAText  string  `json:"student_a_text"`
-		SubmissionBID int64   `json:"submission_b_id"`
-		StudentBName  string  `json:"student_b_name"`
-		StudentBText  string  `json:"student_b_text"`
-		SemanticScore float64 `json:"semantic_score"`
-		LexicalScore  float64 `json:"lexical_score"`
+		ID             int64   `json:"id"`
+		SubmissionAID  int64   `json:"submission_a_id"`
+		StudentAName   string  `json:"student_a_name"`
+		StudentAText   string  `json:"student_a_text"`
+		SubmissionBID  int64   `json:"submission_b_id"`
+		StudentBName   string  `json:"student_b_name"`
+		StudentBText   string  `json:"student_b_text"`
+		SemanticScore  float64 `json:"semantic_score"`
+		LexicalScore   float64 `json:"lexical_score"`
+		MatchedExcerpt string  `json:"matched_excerpt"`
 	}
 
 	simRows, err := h.pool.Query(ctx, `
 		SELECT
 			sf.id, sf.submission_a_id, sa.student_name, sa.answer_text,
 			sf.submission_b_id, sb.student_name, sb.answer_text,
-			sf.semantic_score, sf.lexical_score
+			sf.semantic_score, sf.lexical_score, sf.matched_excerpt
 		FROM similarity_flags sf
 		JOIN submissions sa ON sa.id = sf.submission_a_id
 		JOIN submissions sb ON sb.id = sf.submission_b_id
@@ -459,7 +465,7 @@ func (h *AssignmentHandler) GetDetail(c *gin.Context) {
 			if err := simRows.Scan(
 				&sf.ID, &sf.SubmissionAID, &sf.StudentAName, &sf.StudentAText,
 				&sf.SubmissionBID, &sf.StudentBName, &sf.StudentBText,
-				&sf.SemanticScore, &sf.LexicalScore,
+				&sf.SemanticScore, &sf.LexicalScore, &sf.MatchedExcerpt,
 			); err == nil {
 				similarityFlags = append(similarityFlags, sf)
 			}
@@ -1256,6 +1262,56 @@ func maxInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func (h *AssignmentHandler) ListTrainingSamples(c *gin.Context) {
+	userID := c.GetInt64("user_id")
+	assignmentID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID tugas tidak valid."})
+		return
+	}
+
+	ctx := c.Request.Context()
+	var exists bool
+	_ = h.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM assignments WHERE id = $1 AND user_id = $2)`, assignmentID, userID).Scan(&exists)
+	if !exists {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Tugas tidak ditemukan."})
+		return
+	}
+
+	type sampleItem struct {
+		ID           int64     `json:"id"`
+		AssignmentID int64     `json:"assignment_id"`
+		SubmissionID *int64    `json:"submission_id"`
+		StudentName  string    `json:"student_name"`
+		AnswerText   string    `json:"answer_text"`
+		TargetScore  float64   `json:"target_score"`
+		Source       string    `json:"source"`
+		UpdatedAt    time.Time `json:"updated_at"`
+	}
+
+	rows, err := h.pool.Query(ctx, `
+		SELECT id, assignment_id, submission_id, student_name, answer_text, target_score, source, updated_at
+		FROM training_samples
+		WHERE assignment_id = $1
+		ORDER BY updated_at DESC, id DESC
+	`, assignmentID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memuat sampel data latih."})
+		return
+	}
+	defer rows.Close()
+
+	samples := make([]sampleItem, 0)
+	for rows.Next() {
+		var s sampleItem
+		if err := rows.Scan(&s.ID, &s.AssignmentID, &s.SubmissionID, &s.StudentName, &s.AnswerText, &s.TargetScore, &s.Source, &s.UpdatedAt); err == nil {
+			samples = append(samples, s)
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"samples": samples})
 }
 
 func (h *AssignmentHandler) GuruStats(c *gin.Context) {
