@@ -54,6 +54,7 @@ func main() {
 
 	authHandler := handlers.NewAuthHandler(pool, cfg)
 	assignmentHandler := handlers.NewAssignmentHandler(pool, rdb, cfg)
+	modelHandler := handlers.NewModelHandler(pool, rdb, cfg)
 
 	api := r.Group("/api")
 	{
@@ -97,6 +98,18 @@ func main() {
 			guruGroup.POST("/assignments/:id/score", assignmentHandler.EnqueueScoringJob)
 			guruGroup.GET("/assignments/:id/export", assignmentHandler.ExportResultsExcel)
 			guruGroup.GET("/assignments/:id/training-samples", assignmentHandler.ListTrainingSamples)
+			guruGroup.POST("/assignments/:id/training-samples/excel", modelHandler.UploadTrainingExcel)
+
+			guruGroup.DELETE("/training-samples/:sampleId", modelHandler.DeleteTrainingSample)
+
+			guruGroup.GET("/models", modelHandler.List)
+			guruGroup.POST("/models", modelHandler.Create)
+			guruGroup.GET("/models/:id", modelHandler.GetDetail)
+			guruGroup.PUT("/models/:id", modelHandler.Update)
+			guruGroup.DELETE("/models/:id", modelHandler.Delete)
+			guruGroup.POST("/models/:id/train", modelHandler.StartTraining)
+			guruGroup.POST("/models/:id/versions/:versionId/activate", modelHandler.ActivateVersion)
+			guruGroup.POST("/models/:id/deactivate", modelHandler.DeactivateModel)
 
 			guruGroup.DELETE("/submissions/:subId", assignmentHandler.DeleteSubmission)
 			guruGroup.PUT("/submissions/:subId/revise-score", assignmentHandler.ReviseSubmissionScore)

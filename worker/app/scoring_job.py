@@ -124,6 +124,7 @@ def process_scoring_job(r, payload: Dict[str, Any]):
 
         # Pre-encode poin kunci untuk setiap kriteria rubrik
         criteria_data = []
+        all_key_points = []
         for c_row in criteria_rows:
             pts = split_key_points(c_row["answer_key"])
             vecs = engine.encode(pts) if pts else np.zeros((0, 768), dtype=np.float32)
@@ -136,6 +137,7 @@ def process_scoring_job(r, payload: Dict[str, Any]):
                     "key_vecs": vecs,
                 }
             )
+            all_key_points.extend(pts)
 
         # Cek apakah memakai model custom yang memiliki versi aktif (untuk Fase 4)
         custom_predictor = None
@@ -171,7 +173,10 @@ def process_scoring_job(r, payload: Dict[str, Any]):
             if custom_predictor is not None:
                 pred_norm = custom_predictor.predict_norm(
                     answer_text=ans_text,
-                    agg_features=res["aggregate_features"],
+                    raw_point_scores=res["raw_point_scores"],
+                    crit_slices=res["crit_slices"],
+                    crit_weights=res["crit_weights"],
+                    all_key_points=all_key_points,
                 )
                 predicted_score = round(float(np.clip(pred_norm, 0.0, 1.0)) * max_score, 2)
 
@@ -304,6 +309,7 @@ def process_scoring_job(r, payload: Dict[str, Any]):
     except Exception as exc:
         traceback.print_exc()
         try:
+            conn.rollback()
             update_job_progress(conn, r, job_id, "failed", "gagal", 100, error_message=str(exc))
         except Exception:
             pass

@@ -67,7 +67,7 @@
           <div class="lg:col-span-7 space-y-6">
             <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand-50 dark:bg-brand-900/30 border border-brand-200 dark:border-brand-800 text-brand-700 dark:text-brand-300 text-xs font-bold">
               <Sparkles class="w-3.5 h-3.5" />
-              <span>Ditenagai IndoBERT-lite &amp; Adaptasi Gaya Penilaian Guru (LoRA)</span>
+              <span>Ditenagai IndoBERT (all-indobert-base-v4) &amp; Adaptasi Gaya Penilaian Guru (LoRA)</span>
             </div>
 
             <h1 class="text-3xl sm:text-5xl font-extrabold tracking-tight leading-[1.15]">
@@ -223,7 +223,7 @@
               </div>
               <h3 class="font-bold text-base">Model Custom LoRA</h3>
               <p class="text-xs sm:text-sm text-ink-muted leading-relaxed">
-                Revisi nilai yang Anda berikan menjadi data latih untuk menyesuaikan model IndoBERT-lite dengan standar penilaian Anda.
+                Revisi nilai yang Anda berikan menjadi data latih untuk menyesuaikan model all-indobert-base-v4 dengan standar penilaian Anda.
               </p>
             </div>
           </div>
@@ -393,7 +393,7 @@ const steps = [
   },
   {
     title: 'Penilaian AI & Cek Kemiripan',
-    desc: 'IndoBERT-lite menilai cakupan tiap kriteria, menyusun feedback, dan menandai jawaban yang mirip.',
+    desc: 'Model all-indobert-base-v4 menilai cakupan tiap kriteria, menyusun feedback, dan menandai jawaban yang mirip.',
     icon: Cpu
   },
   {

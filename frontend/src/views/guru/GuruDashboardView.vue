@@ -126,9 +126,14 @@
         >
           <div class="space-y-3">
             <div class="flex items-center justify-between gap-2">
-              <span class="px-2.5 py-0.5 rounded bg-brand-50 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 text-xs font-bold">
-                {{ item.subject }}
-              </span>
+              <div class="flex flex-wrap items-center gap-1.5">
+                <span class="px-2.5 py-0.5 rounded bg-brand-50 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 text-xs font-bold">
+                  {{ item.subject }}
+                </span>
+                <span class="px-2 py-0.5 rounded bg-ink-bg dark:bg-ink-darkBg border border-ink-line dark:border-ink-darkLine text-[11px] font-semibold text-ink-muted">
+                  {{ item.model_type === 'custom' ? (item.custom_model_name || 'Model Custom') : 'all-indobert-base-v4' }}
+                </span>
+              </div>
               <span class="text-xs text-ink-muted num-tabular">
                 {{ formatDate(item.created_at) }}
               </span>

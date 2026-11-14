@@ -98,6 +98,7 @@ services:
     environment:
       WORKER_ROLE: training
       WORKER_QUEUE: ${TRAINING_QUEUE:-queue:training}
+      TRAINER_THREADS: ${TRAINER_THREADS:-2}
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       HF_HOME: ${HF_HOME:-/hf_cache}

@@ -64,11 +64,12 @@ CREATE TABLE IF NOT EXISTS custom_models (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 6. Tabel custom_model_versions (Versi hasil training LoRA + Regression Head)
+-- 6. Tabel custom_model_versions (Versi hasil training Kalibrasi / LoRA)
 CREATE TABLE IF NOT EXISTS custom_model_versions (
     id BIGSERIAL PRIMARY KEY,
     model_id BIGINT NOT NULL REFERENCES custom_models(id) ON DELETE CASCADE,
     version_num INTEGER NOT NULL,
+    training_mode VARCHAR(30) NOT NULL DEFAULT 'calibration',
     storage_path TEXT NOT NULL,
     sample_count INTEGER NOT NULL DEFAULT 0,
     train_count INTEGER NOT NULL DEFAULT 0,
@@ -77,10 +78,14 @@ CREATE TABLE IF NOT EXISTS custom_model_versions (
     pearson_custom DOUBLE PRECISION NOT NULL DEFAULT 0,
     mae_base DOUBLE PRECISION NOT NULL DEFAULT 0,
     pearson_base DOUBLE PRECISION NOT NULL DEFAULT 0,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
     is_active BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (model_id, version_num)
 );
+
+ALTER TABLE custom_model_versions ADD COLUMN IF NOT EXISTS training_mode VARCHAR(30) NOT NULL DEFAULT 'calibration';
+ALTER TABLE custom_model_versions ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb;
 
 -- Tambahkan FK active_version_id setelah tabel custom_model_versions dibuat
 DO $$

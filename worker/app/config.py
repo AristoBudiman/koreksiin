@@ -13,4 +13,5 @@ class Config:
     HF_HOME = os.getenv("HF_HOME", "/hf_cache")
     STORAGE_DIR = os.getenv("STORAGE_DIR", "/storage")
     MIN_TRAIN_SAMPLES = int(os.getenv("MIN_TRAIN_SAMPLES", "20"))
+    TRAINER_THREADS = int(os.getenv("TRAINER_THREADS", "2"))
 

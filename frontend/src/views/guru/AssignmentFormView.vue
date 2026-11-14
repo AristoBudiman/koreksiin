@@ -98,9 +98,20 @@
 
           <div>
             <label class="block text-xs font-bold mb-1.5">Model Penilaian AI</label>
-            <select v-model="form.model_type" class="input-field">
+            <select v-model="selectedModelKey" class="input-field">
               <option value="base">Model Bawaan (LazarusNLP/all-indobert-base-v4)</option>
-              <option value="custom" disabled>Model Custom Guru (Tersedia setelah dilatih di menu Model Custom)</option>
+              <option
+                v-for="cm in availableCustomModels"
+                :key="cm.id"
+                :value="`custom:${cm.id}`"
+                :disabled="!cm.active_version_id"
+              >
+                Model Custom: {{ cm.name }}
+                {{ cm.active_version ? `(v${cm.active_version.version_num} Aktif — MAE ${Number(cm.active_version.mae_custom).toFixed(2)})` : '(Belum ada versi aktif)' }}
+              </option>
+              <option v-if="availableCustomModels.length === 0" value="custom_none" disabled>
+                Model Custom Guru (Buat &amp; latih di menu Model Custom)
+              </option>
             </select>
           </div>
         </div>
@@ -278,6 +289,7 @@ const isEdit = computed(() => !!assignmentId.value)
 
 const saving = ref(false)
 const errorMessage = ref('')
+const availableCustomModels = ref([])
 
 const form = reactive({
   title: '',
@@ -291,6 +303,25 @@ const form = reactive({
     { name: '', weight: 35, answer_key: '' },
     { name: '', weight: 30, answer_key: '' }
   ]
+})
+
+const selectedModelKey = computed({
+  get() {
+    if (form.model_type === 'custom' && form.custom_model_id) {
+      return `custom:${form.custom_model_id}`
+    }
+    return 'base'
+  },
+  set(val) {
+    if (val && val.startsWith('custom:')) {
+      const idNum = Number(val.split(':')[1])
+      form.model_type = 'custom'
+      form.custom_model_id = idNum
+    } else {
+      form.model_type = 'base'
+      form.custom_model_id = null
+    }
+  }
 })
 
 const totalWeight = computed(() =>
@@ -390,8 +421,17 @@ async function handleSubmit() {
   }
 }
 
-onMounted(() => {
-  loadExistingAssignment()
+async function loadCustomModels() {
+  try {
+    const res = await apiFetch('/api/models')
+    availableCustomModels.value = res.models || []
+  } catch {
+    availableCustomModels.value = []
+  }
+}
+
+onMounted(async () => {
+  await Promise.all([loadCustomModels(), loadExistingAssignment()])
 })
 </script>
 

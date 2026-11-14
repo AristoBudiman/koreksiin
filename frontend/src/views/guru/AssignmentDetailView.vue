@@ -80,7 +80,7 @@
                 {{ assignment.subject }}
               </span>
               <span class="px-2.5 py-0.5 rounded bg-ink-bg dark:bg-ink-darkBg border border-ink-line dark:border-ink-darkLine text-xs font-semibold text-ink-muted">
-                Model: {{ assignment.model_type === 'custom' ? assignment.custom_model_name || 'Model Custom' : 'Model Bawaan (IndoBERT v4)' }}
+                Model: {{ assignment.model_type === 'custom' ? (assignment.custom_model_name ? `${assignment.custom_model_name} (LoRA all-indobert-base-v4)` : 'Model Custom (all-indobert-base-v4)') : 'Model Bawaan (all-indobert-base-v4)' }}
               </span>
             </div>
 

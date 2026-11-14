@@ -120,18 +120,22 @@ def build_criterion_feedback(
 def compute_fixed_aggregate_features(
     criteria_results: List[Dict[str, Any]],
     weights: List[float],
+    all_raw_point_scores: List[float],
+    t_high: float,
 ) -> List[float]:
     """
-    Menghasilkan 6 fitur agregat berukuran tetap dari C_i hasil skala ulang:
-    1. weighted_avg_coverage
-    2. min_coverage
-    3. max_coverage
-    4. prop_terpenuhi
-    5. prop_tidak_ada
-    6. base_formula_score (ternormalisasi 0-1)
+    Menghasilkan 8 fitur agregat berukuran tetap:
+    0. weighted_avg_coverage
+    1. min_coverage
+    2. max_coverage
+    3. prop_criteria_terpenuhi
+    4. prop_criteria_tidak_ada
+    5. raw_point_mean (rata-rata cosine mentah semua poin kunci tanpa clip)
+    6. raw_point_min  (cosine mentah minimum semua poin kunci)
+    7. prop_points_tercakup (proporsi poin kunci yang tercakup pada level poin)
     """
     if not criteria_results:
-        return [0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+        return [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]
 
     covs = [float(c["coverage_score"]) for c in criteria_results]
     total_w = sum(weights) if sum(weights) > 0 else float(len(covs))
@@ -141,7 +145,15 @@ def compute_fixed_aggregate_features(
     k = len(criteria_results)
     prop_terpenuhi = sum(1 for c in criteria_results if c["status"] == "terpenuhi") / k
     prop_tidak_ada = sum(1 for c in criteria_results if c["status"] == "tidak_ada") / k
-    base_formula_score = float(np.clip(weighted_avg, 0.0, 1.0))
+
+    if all_raw_point_scores:
+        raw_pt_mean = float(np.mean(all_raw_point_scores))
+        raw_pt_min = float(np.min(all_raw_point_scores))
+        prop_pts_tercakup = sum(1 for s in all_raw_point_scores if s >= t_high) / len(all_raw_point_scores)
+    else:
+        raw_pt_mean = 0.0
+        raw_pt_min = 0.0
+        prop_pts_tercakup = 0.0
 
     return [
         float(weighted_avg),
@@ -149,7 +161,9 @@ def compute_fixed_aggregate_features(
         float(max_cov),
         float(prop_terpenuhi),
         float(prop_tidak_ada),
-        float(base_formula_score),
+        float(raw_pt_mean),
+        float(raw_pt_min),
+        float(prop_pts_tercakup),
     ]
 
 
@@ -183,6 +197,9 @@ def score_single_submission(
 
     criteria_results = []
     weights = []
+    all_raw_point_scores = []
+    crit_slices = []
+    cur_pt_idx = 0
 
     for crit in criteria_data:
         key_points = crit["key_points"]
@@ -191,6 +208,7 @@ def score_single_submission(
         weights.append(w)
 
         if len(key_points) == 0 or key_vecs.shape[0] == 0:
+            crit_slices.append((cur_pt_idx, cur_pt_idx))
             criteria_results.append(
                 {
                     "criterion_id": crit["id"],
@@ -206,6 +224,11 @@ def score_single_submission(
         sim_matrix = np.matmul(key_vecs, win_vecs.T)
         max_indices = np.argmax(sim_matrix, axis=1)
         raw_max_scores = np.max(sim_matrix, axis=1)
+
+        raw_list = [float(s) for s in raw_max_scores]
+        all_raw_point_scores.extend(raw_list)
+        crit_slices.append((cur_pt_idx, cur_pt_idx + len(raw_list)))
+        cur_pt_idx += len(raw_list)
 
         rescaled_scores = [
             rescale_point_score(float(s), t_low=t_low, t_high=t_high)
@@ -253,8 +276,10 @@ def score_single_submission(
             }
         )
 
-    agg_features = compute_fixed_aggregate_features(criteria_results, weights)
-    base_norm_score = agg_features[5]
+    agg_features = compute_fixed_aggregate_features(
+        criteria_results, weights, all_raw_point_scores, t_high
+    )
+    base_norm_score = float(np.clip(agg_features[0], 0.0, 1.0))
     predicted_score = round(base_norm_score * float(max_score), 2)
     feedback_text = " ".join(c["feedback_sentence"] for c in criteria_results)
 
@@ -264,6 +289,9 @@ def score_single_submission(
             "feedback_text": feedback_text,
             "criteria_scores": criteria_results,
             "aggregate_features": agg_features,
+            "raw_point_scores": all_raw_point_scores,
+            "crit_slices": crit_slices,
+            "crit_weights": weights,
         },
         doc_vec,
     )

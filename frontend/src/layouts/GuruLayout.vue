@@ -34,6 +34,14 @@
               <span>Buat Tugas</span>
             </RouterLink>
             <RouterLink
+              to="/guru/model-custom"
+              active-class="bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300"
+              class="px-3.5 py-2 rounded-lg text-ink-muted hover:text-ink dark:hover:text-ink-darkText transition-colors flex items-center gap-2"
+            >
+              <Sliders class="w-4 h-4" />
+              <span>Model Custom</span>
+            </RouterLink>
+            <RouterLink
               to="/guru/langganan"
               active-class="bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300"
               class="px-3.5 py-2 rounded-lg text-ink-muted hover:text-ink dark:hover:text-ink-darkText transition-colors flex items-center gap-2"
@@ -99,6 +107,7 @@ import {
   PenTool,
   LayoutDashboard,
   PlusCircle,
+  Sliders,
   CreditCard,
   Sparkles,
   LogOut,

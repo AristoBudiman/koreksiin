@@ -8,6 +8,7 @@ import AdminLayout from '@/layouts/AdminLayout.vue'
 import GuruDashboardView from '@/views/guru/GuruDashboardView.vue'
 import AssignmentFormView from '@/views/guru/AssignmentFormView.vue'
 import AssignmentDetailView from '@/views/guru/AssignmentDetailView.vue'
+import GuruModelsView from '@/views/guru/GuruModelsView.vue'
 import GuruSubscriptionView from '@/views/guru/GuruSubscriptionView.vue'
 import AdminDashboardView from '@/views/admin/AdminDashboardView.vue'
 
@@ -55,6 +56,11 @@ const router = createRouter({
           path: 'tugas/:id/edit',
           name: 'guru-assignment-edit',
           component: AssignmentFormView
+        },
+        {
+          path: 'model-custom',
+          name: 'guru-models',
+          component: GuruModelsView
         },
         {
           path: 'langganan',
