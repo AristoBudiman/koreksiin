@@ -17,8 +17,23 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+func warnDefaultSecrets(cfg *config.Config) {
+	if cfg.AdminPassword == "" ||
+		cfg.AdminPassword == "AdminKoreksiin2026!" ||
+		cfg.AdminPassword == "GANTI_DENGAN_PASSWORD_KUAT" {
+		log.Printf("[Security] PERINGATAN: ADMIN_PASSWORD masih memakai nilai default/placeholder. Segera ganti dengan password kuat di file .env.")
+	}
+	if cfg.JWTSecret == "" ||
+		cfg.JWTSecret == "koreksiin_super_secret_jwt_key_2026_change_me" ||
+		cfg.JWTSecret == "koreksiin_super_secret_jwt_key_2026_local_dev" ||
+		cfg.JWTSecret == "GANTI_DENGAN_STRING_ACAK_PANJANG" {
+		log.Printf("[Security] PERINGATAN: JWT_SECRET masih memakai nilai default/placeholder. Segera ganti dengan string acak minimal 32 karakter di file .env.")
+	}
+}
+
 func main() {
 	cfg := config.Load()
+	warnDefaultSecrets(cfg)
 
 	if err := os.MkdirAll(cfg.StorageDir, 0755); err != nil {
 		log.Printf("[Storage] Peringatan gagal membuat direktori storage: %v", err)

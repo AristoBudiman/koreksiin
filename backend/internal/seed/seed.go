@@ -2,11 +2,13 @@ package seed
 
 import (
 	"context"
+	"errors"
 	"log"
 	"strings"
 
 	"koreksiin-backend/internal/config"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -93,27 +95,37 @@ func Run(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config) error {
 		WHERE id = 1 AND t_high = 0.72 AND t_low = 0.52
 	`, cfg.DefaultTHigh, cfg.DefaultTLow, cfg.DefaultSSem, cfg.DefaultSLex)
 
-	// 3. Seed Akun Admin dari .env (JANGAN membuat akun guru dummy)
+	// 3. Seed & Sinkronkan Akun Admin dari .env (JANGAN membuat akun guru dummy)
 	adminEmail := strings.ToLower(strings.TrimSpace(cfg.AdminEmail))
 	if adminEmail != "" && cfg.AdminPassword != "" {
-		var exists bool
-		err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)`, adminEmail).Scan(&exists)
-		if err != nil {
-			return err
-		}
-		if !exists {
-			hash, err := bcrypt.GenerateFromPassword([]byte(cfg.AdminPassword), bcrypt.DefaultCost)
-			if err != nil {
-				return err
+		var adminID int64
+		var existingHash string
+		err := pool.QueryRow(ctx, `SELECT id, password_hash FROM users WHERE email = $1`, adminEmail).Scan(&adminID, &existingHash)
+		if errors.Is(err, pgx.ErrNoRows) {
+			hash, hashErr := bcrypt.GenerateFromPassword([]byte(cfg.AdminPassword), bcrypt.DefaultCost)
+			if hashErr != nil {
+				return hashErr
 			}
-			_, err = pool.Exec(ctx, `
+			_, execErr := pool.Exec(ctx, `
 				INSERT INTO users (name, email, institution, password_hash, role, is_active)
 				VALUES ($1, $2, 'Koreksi.in System', $3, 'admin', TRUE)
 			`, cfg.AdminName, adminEmail, string(hash))
-			if err != nil {
-				return err
+			if execErr != nil {
+				return execErr
 			}
 			log.Printf("[Seed] Akun Admin berhasil dibuat untuk email: %s", adminEmail)
+		} else if err != nil {
+			return err
+		} else if bcrypt.CompareHashAndPassword([]byte(existingHash), []byte(cfg.AdminPassword)) != nil {
+			hash, hashErr := bcrypt.GenerateFromPassword([]byte(cfg.AdminPassword), bcrypt.DefaultCost)
+			if hashErr != nil {
+				return hashErr
+			}
+			_, execErr := pool.Exec(ctx, `UPDATE users SET password_hash = $1 WHERE id = $2`, string(hash), adminID)
+			if execErr != nil {
+				return execErr
+			}
+			log.Printf("[Seed] Password admin diperbarui mengikuti konfigurasi environment untuk email: %s", adminEmail)
 		}
 	}
 

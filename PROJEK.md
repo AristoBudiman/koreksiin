@@ -99,9 +99,9 @@ POSTGRES_PORT=5432
 REDIS_ADDR=redis:6379
 
 # Keamanan JWT & Seed Akun Administrator
-JWT_SECRET=ganti_dengan_secret_acak_minimal_32_karakter
+JWT_SECRET=GANTI_DENGAN_STRING_ACAK_PANJANG
 ADMIN_EMAIL=admin@koreksi.in
-ADMIN_PASSWORD=AdminKoreksi2026!
+ADMIN_PASSWORD=GANTI_DENGAN_PASSWORD_KUAT
 ADMIN_NAME=Administrator Koreksi.in
 
 # Konfigurasi AI & Ambang Default (Hasil Kalibrasi all-indobert-base-v4)
@@ -122,6 +122,18 @@ MIDTRANS_CLIENT_KEY=SB-Mid-client-XXXXXXXXXXXXXXXXXXXXXXXX
 # Opsional: URL publik tetap (kosongkan bila memakai Cloudflare Quick Tunnel otomatis)
 PUBLIC_BASE_URL=
 ```
+
+Cara membuat `JWT_SECRET` acak minimal 32 karakter:
+
+```bash
+# Opsi 1 (OpenSSL - Linux / macOS / Git Bash)
+openssl rand -hex 32
+
+# Opsi 2 (Python - lintas OS)
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+
+Salin hasil string acak tersebut ke variabel `JWT_SECRET` pada file `.env`, dan isi `ADMIN_PASSWORD` dengan kata sandi yang kuat (password admin di database otomatis disinkronkan saat container `backend` restart).
 
 ---
 
@@ -159,7 +171,7 @@ Setelah container berstatus *Started* / *Healthy*, buka peramban dan akses:
 
 ### Masuk sebagai Administrator
 1. Buka `http://localhost:8080/masuk`.
-2. Masuk menggunakan kredensial `ADMIN_EMAIL` dan `ADMIN_PASSWORD` yang diatur pada file `.env` (default: `admin@koreksi.in` / `AdminKoreksi2026!`).
+2. Masuk menggunakan kredensial `ADMIN_EMAIL` dan `ADMIN_PASSWORD` yang Anda atur pada file `.env`.
 3. Anda akan diarahkan ke **Panel Administrator** (`/admin`).
 
 ---
