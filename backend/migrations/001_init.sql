@@ -84,9 +84,6 @@ CREATE TABLE IF NOT EXISTS custom_model_versions (
     UNIQUE (model_id, version_num)
 );
 
-ALTER TABLE custom_model_versions ADD COLUMN IF NOT EXISTS training_mode VARCHAR(30) NOT NULL DEFAULT 'calibration';
-ALTER TABLE custom_model_versions ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb;
-
 -- Tambahkan FK active_version_id setelah tabel custom_model_versions dibuat
 DO $$
 BEGIN
@@ -222,6 +219,8 @@ CREATE TABLE IF NOT EXISTS payment_notification_logs (
     status_code VARCHAR(20) NOT NULL,
     transaction_status VARCHAR(40) NOT NULL,
     signature_key TEXT NOT NULL,
+    signature_valid BOOLEAN NOT NULL DEFAULT FALSE,
+    processed_note TEXT NOT NULL DEFAULT '',
     raw_payload JSONB NOT NULL,
     processed_idempotently BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

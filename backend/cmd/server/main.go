@@ -55,6 +55,8 @@ func main() {
 	authHandler := handlers.NewAuthHandler(pool, cfg)
 	assignmentHandler := handlers.NewAssignmentHandler(pool, rdb, cfg)
 	modelHandler := handlers.NewModelHandler(pool, rdb, cfg)
+	paymentHandler := handlers.NewPaymentHandler(pool, cfg)
+	adminHandler := handlers.NewAdminHandler(pool, rdb, cfg)
 
 	api := r.Group("/api")
 	{
@@ -75,6 +77,8 @@ func main() {
 
 		api.GET("/plans", authHandler.PublicPlans)
 		api.GET("/templates/excel", assignmentHandler.DownloadTemplate)
+		api.GET("/payments/config", paymentHandler.GetConfig)
+		api.POST("/payments/midtrans/notification", paymentHandler.MidtransNotification)
 
 		authGroup := api.Group("/auth")
 		{
@@ -115,6 +119,22 @@ func main() {
 			guruGroup.PUT("/submissions/:subId/revise-score", assignmentHandler.ReviseSubmissionScore)
 
 			guruGroup.GET("/jobs/:id", assignmentHandler.GetJobStatus)
+
+			guruGroup.POST("/payments/checkout", paymentHandler.Checkout)
+			guruGroup.GET("/payments/transactions", paymentHandler.ListGuruTransactions)
+		}
+
+		adminGroup := api.Group("/admin")
+		adminGroup.Use(middleware.AuthRequired(cfg.JWTSecret), middleware.RequireRole("admin"))
+		{
+			adminGroup.GET("/overview", adminHandler.Overview)
+			adminGroup.GET("/teachers", adminHandler.ListTeachers)
+			adminGroup.PUT("/teachers/:id/status", adminHandler.UpdateTeacherStatus)
+			adminGroup.GET("/transactions", adminHandler.ListTransactions)
+			adminGroup.GET("/plans", adminHandler.ListPlans)
+			adminGroup.PUT("/plans/:id", adminHandler.UpdatePlan)
+			adminGroup.GET("/ai-settings", adminHandler.GetAISettings)
+			adminGroup.PUT("/ai-settings", adminHandler.UpdateAISettings)
 		}
 	}
 
