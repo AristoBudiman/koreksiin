@@ -232,7 +232,7 @@ func (h *PaymentHandler) reconcilePendingForUser(ctx context.Context, userID int
 		FROM payment_transactions
 		WHERE user_id = $1 AND status = 'pending'
 		ORDER BY created_at DESC
-		LIMIT 15
+		LIMIT 100
 	`, userID)
 	if err != nil {
 		return 0, 0, 0
@@ -263,6 +263,40 @@ func (h *PaymentHandler) reconcilePendingForUser(ctx context.Context, userID int
 	return checkedCount, settledCount, updatedCount
 }
 
+func extractPaymentMethodDetail(data map[string]any, fallbackType string) string {
+	pt := strings.ToLower(strings.TrimSpace(fallbackType))
+	if data != nil {
+		if v, ok := data["payment_type"].(string); ok && strings.TrimSpace(v) != "" {
+			pt = strings.ToLower(strings.TrimSpace(v))
+		}
+		switch pt {
+		case "bank_transfer":
+			if vaArr, ok := data["va_numbers"].([]any); ok && len(vaArr) > 0 {
+				if firstVA, ok := vaArr[0].(map[string]any); ok {
+					if bank, ok := firstVA["bank"].(string); ok && strings.TrimSpace(bank) != "" {
+						return "va_" + strings.ToLower(strings.TrimSpace(bank))
+					}
+				}
+			}
+			if pva, ok := data["permata_va_number"].(string); ok && strings.TrimSpace(pva) != "" {
+				return "va_permata"
+			}
+			if bva, ok := data["bca_va_number"].(string); ok && strings.TrimSpace(bva) != "" {
+				return "va_bca"
+			}
+			return "bank_transfer"
+		case "echannel":
+			return "echannel"
+		case "cstore":
+			if store, ok := data["store"].(string); ok && strings.TrimSpace(store) != "" {
+				return "cstore_" + strings.ToLower(strings.TrimSpace(store))
+			}
+			return "cstore"
+		}
+	}
+	return pt
+}
+
 func (h *PaymentHandler) reconcileOrderWithStatusAPI(ctx context.Context, orderID string) (bool, string, error) {
 	apiData, err := h.verifyWithMidtransStatusAPI(ctx, orderID)
 	if err != nil || apiData == nil {
@@ -271,18 +305,17 @@ func (h *PaymentHandler) reconcileOrderWithStatusAPI(ctx context.Context, orderI
 
 	apiStatusCode, _ := apiData["status_code"].(string)
 	if apiStatusCode != "200" && apiStatusCode != "201" && apiStatusCode != "202" {
-		// Misal 404 saat pengguna baru membuka popup Snap tapi belum memilih channel pembayaran
+		// Misal 404 saat pengguna baru membuka popup Snap tapi belum memilih metode pembayaran
 		return false, "pending", nil
 	}
 
 	effectiveStatus, _ := apiData["transaction_status"].(string)
 	effectiveFraud, _ := apiData["fraud_status"].(string)
-	effectivePaymentType, _ := apiData["payment_type"].(string)
 	effectiveStatus = strings.TrimSpace(effectiveStatus)
 	effectiveFraud = strings.TrimSpace(effectiveFraud)
-	effectivePaymentType = strings.TrimSpace(effectivePaymentType)
+	effectivePaymentType := extractPaymentMethodDetail(apiData, "")
 
-	if effectiveStatus == "" || effectiveStatus == "pending" {
+	if effectiveStatus == "" {
 		return false, "pending", nil
 	}
 
@@ -294,19 +327,19 @@ func (h *PaymentHandler) reconcileOrderWithStatusAPI(ctx context.Context, orderI
 
 	var dbTxID, dbUserID, dbPlanID int64
 	var dbGrossAmount, planQuotaEssays, planDurationDays int
-	var dbStatus, planCode string
+	var dbStatus, dbPaymentType, planCode string
 	var planIsAddon bool
 
 	err = tx.QueryRow(ctx, `
 		SELECT
-			pt.id, pt.user_id, pt.plan_id, pt.gross_amount, pt.status,
+			pt.id, pt.user_id, pt.plan_id, pt.gross_amount, pt.status, COALESCE(pt.payment_type, ''),
 			p.code, p.quota_essays, p.duration_days, p.is_addon
 		FROM payment_transactions pt
 		JOIN plans p ON p.id = pt.plan_id
 		WHERE pt.order_id = $1
 		FOR UPDATE OF pt
 	`, orderID).Scan(
-		&dbTxID, &dbUserID, &dbPlanID, &dbGrossAmount, &dbStatus,
+		&dbTxID, &dbUserID, &dbPlanID, &dbGrossAmount, &dbStatus, &dbPaymentType,
 		&planCode, &planQuotaEssays, &planDurationDays, &planIsAddon,
 	)
 	if err != nil {
@@ -336,12 +369,15 @@ func (h *PaymentHandler) reconcileOrderWithStatusAPI(ctx context.Context, orderI
 		if err := tx.Commit(ctx); err != nil {
 			return false, dbStatus, err
 		}
-		note := fmt.Sprintf("Rekonsiliasi Status API: settlement, +%d kuota esai", planQuotaEssays)
+		note := fmt.Sprintf("Rekonsiliasi Status API: settlement (%s), +%d kuota esai", effectivePaymentType, planQuotaEssays)
 		h.logWebhookNotificationCtx(ctx, orderID, apiStatusCode, "settlement", "reconcile-status-api", true, false, note, rawBytes)
 		return true, "settlement", nil
 	}
 
-	if effectiveStatus != dbStatus {
+	statusChanged := effectiveStatus != dbStatus
+	paymentTypeChanged := effectivePaymentType != "" && effectivePaymentType != dbPaymentType
+
+	if statusChanged || paymentTypeChanged {
 		_, err = tx.Exec(ctx, `
 			UPDATE payment_transactions
 			SET status = $1,
@@ -355,7 +391,7 @@ func (h *PaymentHandler) reconcileOrderWithStatusAPI(ctx context.Context, orderI
 		if err := tx.Commit(ctx); err != nil {
 			return false, dbStatus, err
 		}
-		note := fmt.Sprintf("Rekonsiliasi Status API: status diperbarui ke '%s'", effectiveStatus)
+		note := fmt.Sprintf("Rekonsiliasi Status API: status='%s', metode='%s'", effectiveStatus, effectivePaymentType)
 		h.logWebhookNotificationCtx(ctx, orderID, apiStatusCode, effectiveStatus, "reconcile-status-api", true, false, note, rawBytes)
 		return true, effectiveStatus, nil
 	}
@@ -489,7 +525,6 @@ func (h *PaymentHandler) Checkout(c *gin.Context) {
 			"order_id":     orderID,
 			"gross_amount": priceIDR,
 		},
-		"enabled_payments": []string{"other_qris", "gopay"},
 		"customer_details": map[string]any{
 			"first_name": userName,
 			"email":      userEmail,
@@ -743,10 +778,13 @@ func (h *PaymentHandler) MidtransNotification(c *gin.Context) {
 		return
 	}
 
-	// 5. Konfirmasi ulang status ke endpoint status Midtrans
+	// 5. Konfirmasi ulang status dan metode pembayaran ke endpoint status Midtrans
+	var rawMap map[string]any
+	_ = json.Unmarshal(rawBytes, &rawMap)
+
 	effectiveStatus := txStatus
 	effectiveFraud := strings.TrimSpace(payload.FraudStatus)
-	effectivePaymentType := strings.TrimSpace(payload.PaymentType)
+	effectivePaymentType := extractPaymentMethodDetail(rawMap, payload.PaymentType)
 	verifySource := "Signature SHA512"
 
 	apiData, apiErr := h.verifyWithMidtransStatusAPI(ctx, orderID)
@@ -759,7 +797,7 @@ func (h *PaymentHandler) MidtransNotification(c *gin.Context) {
 			if fr, ok := apiData["fraud_status"].(string); ok {
 				effectiveFraud = fr
 			}
-			if pt, ok := apiData["payment_type"].(string); ok && pt != "" {
+			if pt := extractPaymentMethodDetail(apiData, effectivePaymentType); pt != "" {
 				effectivePaymentType = pt
 			}
 			if gaStr, ok := apiData["gross_amount"].(string); ok && gaStr != "" {

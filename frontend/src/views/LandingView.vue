@@ -263,7 +263,7 @@
                 <h2 class="text-2xl sm:text-3xl font-extrabold tracking-tight">Paket Langganan Prabayar</h2>
               </HandDrawnUnderline>
               <p class="text-sm sm:text-base text-ink-muted mt-3">
-                Transparan, tanpa perpanjangan otomatis yang mengejutkan. Mendukung pembayaran instan via QRIS dan GoPay.
+                Transparan, tanpa perpanjangan otomatis yang mengejutkan. Mendukung pembayaran via QRIS, GoPay, ShopeePay, Virtual Account Bank, Gerai Retail, dan Kartu.
               </p>
             </div>
           </div>

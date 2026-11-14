@@ -190,17 +190,32 @@ Koreksi.in dilengkapi mekanisme **pengiriman URL notifikasi webhook otomatis per
 
 ## 7. Cara Membayar di Simulator Midtrans Sandbox v2
 
+Pilihan metode pembayaran yang tampil di Midtrans Snap mengikuti pengaturan **Payment methods** di Dashboard Midtrans Sandbox Anda (QRIS, GoPay, ShopeePay, Virtual Account Bank, Gerai Retail Indomaret/Alfamart, serta Kartu Kredit/Debit).
+
 1. Masuk sebagai **Guru** di `http://localhost:8080/masuk`, lalu buka menu **Langganan & Kuota** (`/guru/langganan`).
 2. Pilih paket berbayar (misalnya **Paket Guru Bulanan — Rp 49.000** atau **Add-on Kuota +150 Esai — Rp 20.000**) dan klik **Beli Paket Ini**.
 3. Jendela **Midtrans Snap** akan terbuka (atau Anda dapat mengeklik tombol **Bayar (Snap)** / **Link Snap** pada tabel Riwayat Transaksi).
-4. Pilih metode pembayaran **QRIS** (atau **GoPay**) hingga kode QR ditampilkan.
-5. Klik kanan pada gambar kode QR dan pilih **Copy Image Address** (Salin Alamat Gambar).
-6. Buka halaman **Simulator QRIS Midtrans Sandbox v2** di tab baru:
+
+### A. Menguji Pembayaran via QRIS di Simulator v2
+1. Pada jendela Snap, pilih metode pembayaran **QRIS** (atau **GoPay**) hingga kode QR ditampilkan.
+2. Klik kanan pada gambar kode QR dan pilih **Copy Image Address** (Salin Alamat Gambar).
+3. Buka halaman **Simulator QRIS Midtrans Sandbox v2** di tab baru:
    `https://simulator.sandbox.midtrans.com/v2/qris/index`
-7. Tempel URL gambar QR pada kolom *QR Code Image URL*, klik **Scan QR**, lalu klik **Pay** hingga muncul keterangan pembayaran berhasil (**PAID**).
-8. Kembali ke halaman **Langganan & Kuota** (`/guru/langganan`):
-   - Setelah webhook diterima melalui URL tunnel otomatis (`X-Override-Notification`) dan signature SHA512 tervalidasi (atau saat Anda mengeklik tombol **Cek status pembayaran**), status transaksi berubah menjadi **Lunas (Settlement)**.
-   - Kuota esai dan masa aktif paket Anda langsung bertambah.
+4. Tempel URL gambar QR pada kolom *QR Code Image URL*, klik **Scan QR**, lalu klik **Pay** hingga muncul keterangan pembayaran berhasil (**PAID**).
+
+### B. Menguji Pembayaran via Virtual Account Bank di Simulator v2
+1. Pada jendela Snap, pilih **Virtual Account** lalu pilih bank yang diinginkan (misalnya **BCA**, **BNI**, **BRI**, **Mandiri Bill**, **Permata**, atau **CIMB**) hingga nomor Virtual Account ditampilkan.
+2. Klik tombol **Copy** (Salin) pada **Virtual account number** (untuk Mandiri Bill, catat *Company Code / Biller Code* dan *Bill Key*). Selama belum dibayar, transaksi akan tercatat di riwayat dengan status **Menunggu Pembayaran (`pending`)** beserta nama bank Virtual Account-nya.
+3. Buka **Simulator Midtrans Sandbox v2** untuk Virtual Account:
+   - Halaman utama simulator v2 (pilih menu **Virtual Account** lalu pilih bank): `https://simulator.sandbox.midtrans.com/`
+   - Atau langsung ke halaman bank terkait (contoh BCA VA: `https://simulator.sandbox.midtrans.com/bca/va/index`, BNI VA: `https://simulator.sandbox.midtrans.com/bni/va/index`, BRI VA: `https://simulator.sandbox.midtrans.com/bri/va/index`, Permata VA: `https://simulator.sandbox.midtrans.com/permata/va/index`, Mandiri Bill: `https://simulator.sandbox.midtrans.com/mandiri/bill/index`).
+4. Tempel **Virtual Account Number** pada kolom yang tersedia, klik **Inquire**, lalu klik **Pay** hingga muncul status **PAID / Successful**.
+
+### C. Verifikasi Status & Kuota
+- Kembali ke halaman **Langganan & Kuota** (`/guru/langganan`):
+  - Setelah webhook diterima melalui URL tunnel otomatis (`X-Override-Notification`) dan signature SHA512 tervalidasi (atau saat Anda mengeklik tombol **Cek status pembayaran**), status transaksi berubah menjadi **Lunas (Settlement)** dan menampilkan metode pembayaran yang dipakai (misalnya `QRIS`, `BCA Virtual Account`, `BNI Virtual Account`, `Indomaret`, dll.).
+  - Kuota esai dan masa aktif paket Anda langsung bertambah.
+  - Apabila Virtual Account atau kode pembayaran gerai retail melewati batas waktu tanpa dibayar, status akhirnya akan otomatis berubah menjadi **Kedaluwarsa (`expire`)** tanpa menambah kuota.
 
 ---
 

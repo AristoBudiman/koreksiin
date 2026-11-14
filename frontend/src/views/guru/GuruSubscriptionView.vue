@@ -9,7 +9,7 @@
           </h1>
         </HandDrawnUnderline>
         <p class="text-xs sm:text-sm text-ink-muted mt-2 max-w-2xl">
-          Kelola kuota penilaian esai siswa dan beli paket prabayar atau kuota tambahan (Add-on) secara instan melalui Midtrans Snap (QRIS &amp; GoPay).
+          Kelola kuota penilaian esai siswa dan beli paket prabayar atau kuota tambahan (Add-on) melalui Midtrans Snap (QRIS, GoPay, ShopeePay, Virtual Account Bank, Gerai Retail, &amp; Kartu).
         </p>
       </div>
 
@@ -105,7 +105,7 @@
         <div>
           <h2 class="text-lg font-extrabold tracking-tight">Pilih Paket Langganan atau Add-on Kuota</h2>
           <p class="text-xs text-ink-muted mt-0.5">
-            Pembayaran prabayar via Midtrans Snap Sandbox (QRIS / GoPay). Kuota dan masa aktif diperbarui otomatis setelah notifikasi webhook diterima.
+            Pembayaran prabayar via Midtrans Snap Sandbox (QRIS, E-Wallet, Virtual Account Bank, Gerai Retail, atau Kartu). Kuota dan masa aktif diperbarui otomatis setelah pembayaran lunas (settlement).
           </p>
         </div>
       </div>
@@ -267,8 +267,8 @@
               <td class="py-2.5 px-3.5 text-right font-extrabold num-tabular whitespace-nowrap">
                 {{ formatRupiah(tx.gross_amount) }}
               </td>
-              <td class="py-2.5 px-3.5 text-center uppercase text-[11px] font-semibold text-ink-muted">
-                {{ tx.payment_type || '-' }}
+              <td class="py-2.5 px-3.5 text-center text-[11px] font-semibold text-ink dark:text-ink-darkText whitespace-nowrap">
+                {{ formatPaymentMethod(tx.payment_type) }}
               </td>
               <td class="py-2.5 px-3.5 text-center">
                 <span
@@ -377,6 +377,41 @@ function formatStatusLabel(st) {
   if (st === 'expire') return 'Kedaluwarsa'
   if (st === 'cancel' || st === 'deny') return 'Dibatalkan'
   return st
+}
+
+function formatPaymentMethod(pt) {
+  if (!pt) return 'Belum dipilih'
+  const key = String(pt).toLowerCase().trim()
+  const labels = {
+    qris: 'QRIS',
+    other_qris: 'QRIS',
+    gopay: 'GoPay',
+    shopeepay: 'ShopeePay',
+    va_bca: 'BCA Virtual Account',
+    bca_va: 'BCA Virtual Account',
+    va_bni: 'BNI Virtual Account',
+    bni_va: 'BNI Virtual Account',
+    va_bri: 'BRI Virtual Account',
+    bri_va: 'BRI Virtual Account',
+    va_permata: 'Permata Virtual Account',
+    permata_va: 'Permata Virtual Account',
+    va_cimb: 'CIMB Virtual Account',
+    cimb_va: 'CIMB Virtual Account',
+    va_danamon: 'Danamon Virtual Account',
+    va_bsi: 'BSI Virtual Account',
+    echannel: 'Mandiri Bill / VA',
+    bank_transfer: 'Transfer Bank (VA)',
+    cstore_indomaret: 'Indomaret',
+    cstore_alfamart: 'Alfamart',
+    cstore: 'Gerai Retail',
+    credit_card: 'Kartu Kredit / Debit',
+    akulaku: 'Akulaku',
+    kredivo: 'Kredivo'
+  }
+  if (labels[key]) return labels[key]
+  if (key.startsWith('va_')) return key.slice(3).toUpperCase() + ' Virtual Account'
+  if (key.startsWith('cstore_')) return 'Gerai ' + key.slice(7).toUpperCase()
+  return pt.replace(/_/g, ' ').toUpperCase()
 }
 
 function statusBadgeClass(st) {
