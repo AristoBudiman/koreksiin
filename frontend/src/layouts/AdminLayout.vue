@@ -5,15 +5,16 @@
       <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
         <div class="flex items-center gap-6">
           <RouterLink to="/admin" class="flex items-center gap-2.5">
-            <div class="w-9 h-9 rounded-lg bg-brand-700 flex items-center justify-center text-white">
-              <Shield class="w-5 h-5" />
-            </div>
-            <div>
-              <span class="font-extrabold text-lg tracking-tight leading-none block">
+            <BrandLogo size="md" compactOnMobile />
+            <div class="sm:hidden whitespace-nowrap">
+              <span class="font-extrabold text-sm tracking-tight leading-none block">
                 Koreksi<span class="text-brand-700 dark:text-brand-400">.in</span>
               </span>
-              <span class="text-[11px] font-semibold text-brand-700 dark:text-brand-400">Panel Administrator</span>
+              <span class="text-[10px] font-semibold text-brand-700 dark:text-brand-400 block">Panel Administrator</span>
             </div>
+            <span class="hidden sm:inline-block px-2 py-0.5 rounded bg-brand-50 dark:bg-brand-900/30 border border-brand-200 dark:border-brand-800 text-[11px] font-bold text-brand-700 dark:text-brand-300 whitespace-nowrap">
+              Panel Administrator
+            </span>
           </RouterLink>
 
           <nav class="hidden md:flex items-center gap-1 text-sm font-semibold">
@@ -66,12 +67,12 @@
 <script setup>
 import { useRouter } from 'vue-router'
 import {
-  Shield,
   LayoutDashboard,
   LogOut,
   Sun,
   Moon
 } from 'lucide-vue-next'
+import BrandLogo from '@/components/BrandLogo.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 import { useToastStore } from '@/stores/toast'

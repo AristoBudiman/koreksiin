@@ -97,6 +97,44 @@
       </div>
     </div>
 
+    <!-- URL Notifikasi Midtrans Aktif (Read-Only) -->
+    <div class="card-paper p-5 space-y-2.5">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <Globe class="w-4 h-4 text-brand-700 dark:text-brand-400 shrink-0" />
+          <h2 class="text-xs font-extrabold uppercase tracking-wider text-ink-muted">
+            URL Notifikasi Webhook Midtrans Aktif (Read-Only)
+          </h2>
+        </div>
+        <span
+          class="px-2.5 py-0.5 rounded text-[11px] font-bold self-start sm:self-center"
+          :class="
+            overview.notification_url
+              ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'
+              : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+          "
+        >
+          {{
+            overview.notification_url_source === 'public_base_url'
+              ? 'Sumber: PUBLIC_BASE_URL (X-Override-Notification)'
+              : overview.notification_url_source === 'tunnel'
+                ? 'Sumber: Cloudflare Quick Tunnel Otomatis (X-Override-Notification)'
+                : 'Sumber: Default Dashboard Midtrans'
+          }}
+        </span>
+      </div>
+
+      <input
+        type="text"
+        readonly
+        :value="overview.notification_url || 'Belum ada tunnel aktif — Midtrans memakai Payment Notification URL di Dashboard'"
+        class="input-field font-mono text-xs bg-ink-bg dark:bg-ink-darkBg cursor-default select-all"
+      />
+      <p class="text-[11px] text-ink-muted">
+        URL ini dikirim otomatis pada header <code class="font-bold">X-Override-Notification</code> setiap kali guru membuat transaksi Snap baru, sehingga Anda tidak perlu memperbarui URL di Dashboard Midtrans saat tunnel dimulai ulang.
+      </p>
+    </div>
+
     <!-- Distribusi Guru per Paket -->
     <div v-if="overview.plan_distribution?.length" class="card-paper p-5 space-y-3">
       <h2 class="text-xs font-extrabold uppercase tracking-wider text-ink-muted">
@@ -557,7 +595,8 @@ import {
   Package,
   Sliders,
   Save,
-  Loader2
+  Loader2,
+  Globe
 } from 'lucide-vue-next'
 import HandDrawnUnderline from '@/components/HandDrawnUnderline.vue'
 import ScoreCircleHighlight from '@/components/ScoreCircleHighlight.vue'
@@ -587,6 +626,8 @@ const overview = reactive({
   settled_transactions: 0,
   total_revenue_idr: 0,
   plan_distribution: [],
+  notification_url: '',
+  notification_url_source: 'dashboard_default',
   workers: { scoring_online: true, training_online: true }
 })
 

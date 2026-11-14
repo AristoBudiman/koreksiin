@@ -4,14 +4,12 @@
     <header class="sticky top-0 z-30 border-b border-ink-line dark:border-ink-darkLine bg-ink-card/90 dark:bg-ink-darkCard/90 backdrop-blur-md">
       <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
         <RouterLink to="/" class="flex items-center gap-2.5 group">
-          <div class="w-9 h-9 rounded-lg bg-brand-500 flex items-center justify-center text-white shadow-sm group-hover:bg-brand-600 transition-colors">
-            <PenTool class="w-5 h-5" />
-          </div>
-          <div class="flex flex-col">
-            <span class="font-extrabold text-lg tracking-tight leading-none">
+          <BrandLogo size="md" compactOnMobile />
+          <div class="sm:hidden flex flex-col">
+            <span class="font-extrabold text-sm tracking-tight leading-none">
               Koreksi<span class="text-brand-700 dark:text-brand-400">.in</span>
             </span>
-            <span class="text-[11px] font-medium text-ink-muted">Penilaian Esai Otomatis AI</span>
+            <span class="text-[10px] font-medium text-ink-muted">Penilaian Esai Otomatis AI</span>
           </div>
         </RouterLink>
 
@@ -339,9 +337,8 @@
     <!-- Footer -->
     <footer class="border-t border-ink-line dark:border-ink-darkLine bg-ink-card dark:bg-ink-darkCard py-8">
       <div class="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-ink-muted">
-        <div class="flex items-center gap-2">
-          <PenTool class="w-4 h-4 text-brand-700 dark:text-brand-400" />
-          <span class="font-bold text-ink dark:text-ink-darkText">Koreksi.in</span>
+        <div class="flex items-center gap-3">
+          <BrandLogo size="sm" />
           <span>— Platform SaaS Penilaian Esai Otomatis Berbasis AI</span>
         </div>
         <p>Proyek Mata Kuliah Kewirausahaan — Informatika UNS</p>
@@ -353,7 +350,6 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import {
-  PenTool,
   Sparkles,
   ArrowRight,
   UserPlus,
@@ -373,6 +369,7 @@ import {
   Sun,
   Moon
 } from 'lucide-vue-next'
+import BrandLogo from '@/components/BrandLogo.vue'
 import HandDrawnUnderline from '@/components/HandDrawnUnderline.vue'
 import ScoreCircleHighlight from '@/components/ScoreCircleHighlight.vue'
 import CountUpNumber from '@/components/CountUpNumber.vue'

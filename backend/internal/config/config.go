@@ -25,6 +25,8 @@ type Config struct {
 	MidtransServerKey    string
 	MidtransClientKey    string
 	MidtransIsProduction bool
+	PublicBaseURL        string
+	TunnelMetricsURL     string
 }
 
 func Load() *Config {
@@ -48,6 +50,8 @@ func Load() *Config {
 		MidtransServerKey:    getEnv("MIDTRANS_SERVER_KEY", ""),
 		MidtransClientKey:    getEnv("MIDTRANS_CLIENT_KEY", ""),
 		MidtransIsProduction: getEnv("MIDTRANS_IS_PRODUCTION", "false") == "true",
+		PublicBaseURL:        getEnv("PUBLIC_BASE_URL", ""),
+		TunnelMetricsURL:     getEnv("TUNNEL_METRICS_URL", "http://tunnel:2000/quicktunnel"),
 	}
 }
 

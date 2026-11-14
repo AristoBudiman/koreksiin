@@ -14,13 +14,14 @@ import (
 )
 
 type AdminHandler struct {
-	pool *pgxpool.Pool
-	rdb  *redis.Client
-	cfg  *config.Config
+	pool           *pgxpool.Pool
+	rdb            *redis.Client
+	cfg            *config.Config
+	paymentHandler *PaymentHandler
 }
 
-func NewAdminHandler(pool *pgxpool.Pool, rdb *redis.Client, cfg *config.Config) *AdminHandler {
-	return &AdminHandler{pool: pool, rdb: rdb, cfg: cfg}
+func NewAdminHandler(pool *pgxpool.Pool, rdb *redis.Client, cfg *config.Config, paymentHandler *PaymentHandler) *AdminHandler {
+	return &AdminHandler{pool: pool, rdb: rdb, cfg: cfg, paymentHandler: paymentHandler}
 }
 
 func (h *AdminHandler) Overview(c *gin.Context) {
@@ -67,16 +68,24 @@ func (h *AdminHandler) Overview(c *gin.Context) {
 	scoringHeartbeat, _ := h.rdb.Get(ctx, "worker:heartbeat:scoring").Result()
 	trainingHeartbeat, _ := h.rdb.Get(ctx, "worker:heartbeat:training").Result()
 
+	notifURL := ""
+	notifSource := "dashboard_default"
+	if h.paymentHandler != nil {
+		notifURL, notifSource = h.paymentHandler.ResolveNotificationURL(false)
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"total_teachers":       totalTeachers,
-		"active_teachers":      activeTeachers,
-		"inactive_teachers":    totalTeachers - activeTeachers,
-		"total_assignments":    totalAssignments,
-		"total_scored_essays":  totalScoredEssays,
-		"total_custom_models":  totalCustomModels,
-		"settled_transactions": settledTransactions,
-		"total_revenue_idr":    totalRevenueIDR,
-		"plan_distribution":    planDist,
+		"total_teachers":          totalTeachers,
+		"active_teachers":         activeTeachers,
+		"inactive_teachers":       totalTeachers - activeTeachers,
+		"total_assignments":       totalAssignments,
+		"total_scored_essays":     totalScoredEssays,
+		"total_custom_models":     totalCustomModels,
+		"settled_transactions":    settledTransactions,
+		"total_revenue_idr":       totalRevenueIDR,
+		"plan_distribution":       planDist,
+		"notification_url":        notifURL,
+		"notification_url_source": notifSource,
 		"workers": gin.H{
 			"scoring_online":  scoringHeartbeat != "",
 			"training_online": trainingHeartbeat != "",

@@ -2,27 +2,36 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha512"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"koreksiin-backend/internal/config"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type PaymentHandler struct {
 	pool *pgxpool.Pool
 	cfg  *config.Config
+
+	mu           sync.Mutex
+	cachedURL    string
+	cachedSource string
+	cachedAt     time.Time
 }
 
 func NewPaymentHandler(pool *pgxpool.Pool, cfg *config.Config) *PaymentHandler {
@@ -60,6 +69,81 @@ type MidtransNotificationPayload struct {
 	PaymentType       string `json:"payment_type"`
 }
 
+// ResolveNotificationURL menentukan URL notifikasi webhook Midtrans secara berurutan:
+// 1. Jika env PUBLIC_BASE_URL diisi, gunakan <PUBLIC_BASE_URL>/api/payments/midtrans/notification.
+// 2. Jika tidak, ambil hostname aktif dari http://tunnel:2000/quicktunnel (cache 60 detik).
+// 3. Jika endpoint tunnel tidak dapat diakses, kembalikan string kosong dan catat peringatan di log.
+func (h *PaymentHandler) ResolveNotificationURL(forceRefresh bool) (string, string) {
+	if pub := strings.TrimSpace(h.cfg.PublicBaseURL); pub != "" {
+		cleanBase := strings.TrimRight(pub, "/")
+		if !strings.HasPrefix(cleanBase, "https://") && !strings.HasPrefix(cleanBase, "http://") {
+			cleanBase = "https://" + cleanBase
+		}
+		return cleanBase + "/api/payments/midtrans/notification", "public_base_url"
+	}
+
+	h.mu.Lock()
+	if !forceRefresh && h.cachedURL != "" && time.Since(h.cachedAt) < 60*time.Second {
+		url := h.cachedURL
+		src := h.cachedSource
+		h.mu.Unlock()
+		return url, src
+	}
+	h.mu.Unlock()
+
+	metricsURL := strings.TrimSpace(h.cfg.TunnelMetricsURL)
+	if metricsURL == "" {
+		metricsURL = "http://tunnel:2000/quicktunnel"
+	}
+
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get(metricsURL)
+	if err != nil {
+		log.Printf("[Payments] Peringatan: endpoint tunnel (%s) tidak dapat diakses (%v). Header X-Override-Notification tidak dikirim (menggunakan URL dashboard Midtrans).", metricsURL, err)
+		return "", "dashboard_default"
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		log.Printf("[Payments] Peringatan: endpoint tunnel (%s) mengembalikan status %d. Header X-Override-Notification tidak dikirim (menggunakan URL dashboard Midtrans).", metricsURL, resp.StatusCode)
+		return "", "dashboard_default"
+	}
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("[Payments] Peringatan: gagal membaca respons endpoint tunnel (%s): %v. Header X-Override-Notification tidak dikirim.", metricsURL, err)
+		return "", "dashboard_default"
+	}
+
+	var qt struct {
+		Hostname string `json:"hostname"`
+	}
+	if err := json.Unmarshal(bodyBytes, &qt); err != nil {
+		log.Printf("[Payments] Peringatan: respons JSON endpoint tunnel (%s) tidak valid: %v. Header X-Override-Notification tidak dikirim.", metricsURL, err)
+		return "", "dashboard_default"
+	}
+
+	host := strings.TrimSpace(qt.Hostname)
+	host = strings.TrimPrefix(host, "https://")
+	host = strings.TrimPrefix(host, "http://")
+	host = strings.Trim(host, "/")
+
+	if host == "" || strings.Contains(host, "/") {
+		log.Printf("[Payments] Peringatan: hostname tunnel kosong atau belum siap dari %s. Header X-Override-Notification tidak dikirim.", metricsURL)
+		return "", "dashboard_default"
+	}
+
+	notifURL := fmt.Sprintf("https://%s/api/payments/midtrans/notification", host)
+
+	h.mu.Lock()
+	h.cachedURL = notifURL
+	h.cachedSource = "tunnel"
+	h.cachedAt = time.Now()
+	h.mu.Unlock()
+
+	return notifURL, "tunnel"
+}
+
 func (h *PaymentHandler) GetConfig(c *gin.Context) {
 	snapURL := "https://app.sandbox.midtrans.com/snap/snap.js"
 	if h.cfg.MidtransIsProduction {
@@ -76,6 +160,11 @@ func (h *PaymentHandler) GetConfig(c *gin.Context) {
 func (h *PaymentHandler) ListGuruTransactions(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 	ctx := c.Request.Context()
+
+	reconcileParam := strings.TrimSpace(c.Query("reconcile"))
+	if reconcileParam == "1" || strings.EqualFold(reconcileParam, "true") {
+		_, _, _ = h.reconcilePendingForUser(ctx, userID)
+	}
 
 	rows, err := h.pool.Query(ctx, `
 		SELECT
@@ -106,6 +195,239 @@ func (h *PaymentHandler) ListGuruTransactions(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"transactions": items})
+}
+
+func (h *PaymentHandler) ReconcileGuruTransactions(c *gin.Context) {
+	userID := c.GetInt64("user_id")
+	ctx := c.Request.Context()
+
+	checkedCount, settledCount, updatedCount := h.reconcilePendingForUser(ctx, userID)
+
+	msg := "Tidak ada transaksi pending yang berubah status."
+	if checkedCount == 0 {
+		msg = "Tidak ada transaksi berstatus menunggu pembayaran (pending)."
+	} else if settledCount > 0 {
+		msg = fmt.Sprintf("Berhasil memverifikasi %d pembayaran lunas. Kuota langganan Anda telah diperbarui!", settledCount)
+	} else if updatedCount > 0 {
+		msg = fmt.Sprintf("Status %d transaksi berhasil disinkronkan dari Midtrans.", updatedCount)
+	} else {
+		msg = fmt.Sprintf("Telah memeriksa %d transaksi pending ke Midtrans: pembayaran belum diselesaikan.", checkedCount)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"checked_count": checkedCount,
+		"settled_count": settledCount,
+		"updated_count": updatedCount,
+		"message":       msg,
+	})
+}
+
+func (h *PaymentHandler) reconcilePendingForUser(ctx context.Context, userID int64) (int, int, int) {
+	if strings.TrimSpace(h.cfg.MidtransServerKey) == "" {
+		return 0, 0, 0
+	}
+
+	rows, err := h.pool.Query(ctx, `
+		SELECT order_id
+		FROM payment_transactions
+		WHERE user_id = $1 AND status = 'pending'
+		ORDER BY created_at DESC
+		LIMIT 15
+	`, userID)
+	if err != nil {
+		return 0, 0, 0
+	}
+	var pendingOrders []string
+	for rows.Next() {
+		var oid string
+		if err := rows.Scan(&oid); err == nil && oid != "" {
+			pendingOrders = append(pendingOrders, oid)
+		}
+	}
+	rows.Close()
+
+	checkedCount := len(pendingOrders)
+	settledCount := 0
+	updatedCount := 0
+
+	for _, oid := range pendingOrders {
+		changed, newStatus, err := h.reconcileOrderWithStatusAPI(ctx, oid)
+		if err == nil && changed {
+			updatedCount++
+			if newStatus == "settlement" {
+				settledCount++
+			}
+		}
+	}
+
+	return checkedCount, settledCount, updatedCount
+}
+
+func (h *PaymentHandler) reconcileOrderWithStatusAPI(ctx context.Context, orderID string) (bool, string, error) {
+	apiData, err := h.verifyWithMidtransStatusAPI(ctx, orderID)
+	if err != nil || apiData == nil {
+		return false, "", err
+	}
+
+	apiStatusCode, _ := apiData["status_code"].(string)
+	if apiStatusCode != "200" && apiStatusCode != "201" && apiStatusCode != "202" {
+		// Misal 404 saat pengguna baru membuka popup Snap tapi belum memilih channel pembayaran
+		return false, "pending", nil
+	}
+
+	effectiveStatus, _ := apiData["transaction_status"].(string)
+	effectiveFraud, _ := apiData["fraud_status"].(string)
+	effectivePaymentType, _ := apiData["payment_type"].(string)
+	effectiveStatus = strings.TrimSpace(effectiveStatus)
+	effectiveFraud = strings.TrimSpace(effectiveFraud)
+	effectivePaymentType = strings.TrimSpace(effectivePaymentType)
+
+	if effectiveStatus == "" || effectiveStatus == "pending" {
+		return false, "pending", nil
+	}
+
+	tx, err := h.pool.Begin(ctx)
+	if err != nil {
+		return false, "", err
+	}
+	defer tx.Rollback(ctx)
+
+	var dbTxID, dbUserID, dbPlanID int64
+	var dbGrossAmount, planQuotaEssays, planDurationDays int
+	var dbStatus, planCode string
+	var planIsAddon bool
+
+	err = tx.QueryRow(ctx, `
+		SELECT
+			pt.id, pt.user_id, pt.plan_id, pt.gross_amount, pt.status,
+			p.code, p.quota_essays, p.duration_days, p.is_addon
+		FROM payment_transactions pt
+		JOIN plans p ON p.id = pt.plan_id
+		WHERE pt.order_id = $1
+		FOR UPDATE OF pt
+	`, orderID).Scan(
+		&dbTxID, &dbUserID, &dbPlanID, &dbGrossAmount, &dbStatus,
+		&planCode, &planQuotaEssays, &planDurationDays, &planIsAddon,
+	)
+	if err != nil {
+		return false, "", err
+	}
+
+	// Idempoten: jika sudah settlement/capture, jangan proses ulang
+	if dbStatus == "settlement" || dbStatus == "capture" {
+		return false, dbStatus, nil
+	}
+
+	if gaStr, ok := apiData["gross_amount"].(string); ok && gaStr != "" {
+		if apiGross, err := strconv.ParseFloat(gaStr, 64); err == nil {
+			if math.Abs(apiGross-float64(dbGrossAmount)) > 0.01 {
+				return false, dbStatus, fmt.Errorf("nominal gross_amount Status API tidak cocok")
+			}
+		}
+	}
+
+	rawBytes, _ := json.Marshal(apiData)
+	isPaid := effectiveStatus == "settlement" || (effectiveStatus == "capture" && (effectiveFraud == "" || effectiveFraud == "accept"))
+
+	if isPaid {
+		if err := h.applySettlementTx(ctx, tx, dbTxID, dbUserID, dbPlanID, planQuotaEssays, planDurationDays, planIsAddon, effectivePaymentType); err != nil {
+			return false, dbStatus, err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return false, dbStatus, err
+		}
+		note := fmt.Sprintf("Rekonsiliasi Status API: settlement, +%d kuota esai", planQuotaEssays)
+		h.logWebhookNotificationCtx(ctx, orderID, apiStatusCode, "settlement", "reconcile-status-api", true, false, note, rawBytes)
+		return true, "settlement", nil
+	}
+
+	if effectiveStatus != dbStatus {
+		_, err = tx.Exec(ctx, `
+			UPDATE payment_transactions
+			SET status = $1,
+			    payment_type = COALESCE(NULLIF($2, ''), payment_type),
+			    updated_at = NOW()
+			WHERE id = $3
+		`, effectiveStatus, effectivePaymentType, dbTxID)
+		if err != nil {
+			return false, dbStatus, err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return false, dbStatus, err
+		}
+		note := fmt.Sprintf("Rekonsiliasi Status API: status diperbarui ke '%s'", effectiveStatus)
+		h.logWebhookNotificationCtx(ctx, orderID, apiStatusCode, effectiveStatus, "reconcile-status-api", true, false, note, rawBytes)
+		return true, effectiveStatus, nil
+	}
+
+	return false, dbStatus, nil
+}
+
+func (h *PaymentHandler) applySettlementTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	dbTxID int64,
+	dbUserID int64,
+	dbPlanID int64,
+	planQuotaEssays int,
+	planDurationDays int,
+	planIsAddon bool,
+	effectivePaymentType string,
+) error {
+	_, err := tx.Exec(ctx, `
+		UPDATE payment_transactions
+		SET status = 'settlement',
+		    payment_type = $1,
+		    paid_at = NOW(),
+		    updated_at = NOW()
+		WHERE id = $2
+	`, effectivePaymentType, dbTxID)
+	if err != nil {
+		return err
+	}
+
+	if planIsAddon {
+		_, err = tx.Exec(ctx, `
+			UPDATE subscriptions
+			SET quota_total = quota_total + $1,
+			    updated_at = NOW()
+			WHERE user_id = $2
+		`, planQuotaEssays, dbUserID)
+		return err
+	}
+
+	var curPlanCode string
+	var curRemaining int
+	var curExpiresAt *time.Time
+	_ = tx.QueryRow(ctx, `
+		SELECT p.code, GREATEST(s.quota_total - s.quota_used, 0), s.expires_at
+		FROM subscriptions s
+		JOIN plans p ON p.id = s.plan_id
+		WHERE s.user_id = $1
+	`, dbUserID).Scan(&curPlanCode, &curRemaining, &curExpiresAt)
+
+	newQuotaTotal := planQuotaEssays
+	if curPlanCode != "" && curPlanCode != "free" && curRemaining > 0 {
+		newQuotaTotal = curRemaining + planQuotaEssays
+	}
+
+	baseTime := time.Now()
+	if curExpiresAt != nil && curExpiresAt.After(baseTime) {
+		baseTime = *curExpiresAt
+	}
+	newExpiresAt := baseTime.AddDate(0, 0, planDurationDays)
+
+	_, err = tx.Exec(ctx, `
+		UPDATE subscriptions
+		SET plan_id = $1,
+		    quota_total = $2,
+		    quota_used = 0,
+		    quota_reset_at = NULL,
+		    expires_at = $3,
+		    updated_at = NOW()
+		WHERE user_id = $4
+	`, dbPlanID, newQuotaTotal, newExpiresAt, dbUserID)
+	return err
 }
 
 func (h *PaymentHandler) Checkout(c *gin.Context) {
@@ -194,6 +516,12 @@ func (h *PaymentHandler) Checkout(c *gin.Context) {
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "application/json")
 
+	notifURL, notifSource := h.ResolveNotificationURL(false)
+	if notifURL != "" {
+		httpReq.Header.Set("X-Override-Notification", notifURL)
+		log.Printf("[Payments] Mengirim X-Override-Notification (%s) untuk order %s: %s", notifSource, orderID, notifURL)
+	}
+
 	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Do(httpReq)
 	if err != nil {
@@ -233,25 +561,27 @@ func (h *PaymentHandler) Checkout(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"message":           "Transaksi berhasil dibuat. Silakan selesaikan pembayaran melalui Midtrans Snap.",
-		"transaction_id":    txID,
-		"order_id":          orderID,
-		"plan_code":         planCode,
-		"plan_name":         planName,
-		"gross_amount":      priceIDR,
-		"snap_token":        snapResp.Token,
-		"snap_redirect_url": snapResp.RedirectURL,
+		"message":             "Transaksi berhasil dibuat. Silakan selesaikan pembayaran melalui Midtrans Snap.",
+		"transaction_id":      txID,
+		"order_id":            orderID,
+		"plan_code":           planCode,
+		"plan_name":           planName,
+		"gross_amount":        priceIDR,
+		"snap_token":          snapResp.Token,
+		"snap_redirect_url":   snapResp.RedirectURL,
+		"notification_url":    notifURL,
+		"notification_source": notifSource,
 	})
 }
 
-func (h *PaymentHandler) verifyWithMidtransStatusAPI(ctx *gin.Context, orderID string) (map[string]any, error) {
+func (h *PaymentHandler) verifyWithMidtransStatusAPI(ctx context.Context, orderID string) (map[string]any, error) {
 	baseAPI := "https://api.sandbox.midtrans.com"
 	if h.cfg.MidtransIsProduction {
 		baseAPI = "https://api.midtrans.com"
 	}
 	url := fmt.Sprintf("%s/v2/%s/status", baseAPI, orderID)
 
-	req, err := http.NewRequestWithContext(ctx.Request.Context(), http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -278,8 +608,8 @@ func (h *PaymentHandler) verifyWithMidtransStatusAPI(ctx *gin.Context, orderID s
 	return data, nil
 }
 
-func (h *PaymentHandler) logWebhookNotification(
-	c *gin.Context,
+func (h *PaymentHandler) logWebhookNotificationCtx(
+	ctx context.Context,
 	orderID string,
 	statusCode string,
 	txStatus string,
@@ -293,13 +623,27 @@ func (h *PaymentHandler) logWebhookNotification(
 	if strings.TrimSpace(rawJSON) == "" {
 		rawJSON = "{}"
 	}
-	_, _ = h.pool.Exec(c.Request.Context(), `
+	_, _ = h.pool.Exec(ctx, `
 		INSERT INTO payment_notification_logs (
 			order_id, status_code, transaction_status, signature_key,
 			signature_valid, processed_idempotently, processed_note, raw_payload
 		)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
 	`, orderID, statusCode, txStatus, sigKey, sigValid, idempotent, note, rawJSON)
+}
+
+func (h *PaymentHandler) logWebhookNotification(
+	c *gin.Context,
+	orderID string,
+	statusCode string,
+	txStatus string,
+	sigKey string,
+	sigValid bool,
+	idempotent bool,
+	note string,
+	rawBytes []byte,
+) {
+	h.logWebhookNotificationCtx(c.Request.Context(), orderID, statusCode, txStatus, sigKey, sigValid, idempotent, note, rawBytes)
 }
 
 func (h *PaymentHandler) MidtransNotification(c *gin.Context) {
@@ -405,7 +749,7 @@ func (h *PaymentHandler) MidtransNotification(c *gin.Context) {
 	effectivePaymentType := strings.TrimSpace(payload.PaymentType)
 	verifySource := "Signature SHA512"
 
-	apiData, apiErr := h.verifyWithMidtransStatusAPI(c, orderID)
+	apiData, apiErr := h.verifyWithMidtransStatusAPI(ctx, orderID)
 	if apiErr == nil && apiData != nil {
 		apiStatusCode, _ := apiData["status_code"].(string)
 		if apiStatusCode == "200" || apiStatusCode == "201" || apiStatusCode == "202" {
@@ -435,65 +779,8 @@ func (h *PaymentHandler) MidtransNotification(c *gin.Context) {
 	isPaid := effectiveStatus == "settlement" || (effectiveStatus == "capture" && (effectiveFraud == "" || effectiveFraud == "accept"))
 
 	if isPaid {
-		_, err = tx.Exec(ctx, `
-			UPDATE payment_transactions
-			SET status = 'settlement',
-			    payment_type = $1,
-			    paid_at = NOW(),
-			    updated_at = NOW()
-			WHERE id = $2
-		`, effectivePaymentType, dbTxID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memperbarui status transaksi."})
-			return
-		}
-
-		// Perbarui langganan / kuota guru HANYA saat pembayaran settlement/capture
-		if planIsAddon {
-			// Add-on: tambahkan ke quota_total dan masa berlaku mengikuti paket aktif saat ini
-			_, err = tx.Exec(ctx, `
-				UPDATE subscriptions
-				SET quota_total = quota_total + $1,
-				    updated_at = NOW()
-				WHERE user_id = $2
-			`, planQuotaEssays, dbUserID)
-		} else {
-			// Paket Bulanan / Tahunan: cek apakah sebelumnya paket gratis atau paket berbayar aktif
-			var curPlanCode string
-			var curRemaining int
-			var curExpiresAt *time.Time
-			_ = tx.QueryRow(ctx, `
-				SELECT p.code, GREATEST(s.quota_total - s.quota_used, 0), s.expires_at
-				FROM subscriptions s
-				JOIN plans p ON p.id = s.plan_id
-				WHERE s.user_id = $1
-			`, dbUserID).Scan(&curPlanCode, &curRemaining, &curExpiresAt)
-
-			newQuotaTotal := planQuotaEssays
-			if curPlanCode != "" && curPlanCode != "free" && curRemaining > 0 {
-				// Bila masih ada sisa kuota berbayar/add-on sebelumnya, akumulasikan ke paket baru
-				newQuotaTotal = curRemaining + planQuotaEssays
-			}
-
-			baseTime := time.Now()
-			if curExpiresAt != nil && curExpiresAt.After(baseTime) {
-				baseTime = *curExpiresAt
-			}
-			newExpiresAt := baseTime.AddDate(0, 0, planDurationDays)
-
-			_, err = tx.Exec(ctx, `
-				UPDATE subscriptions
-				SET plan_id = $1,
-				    quota_total = $2,
-				    quota_used = 0,
-				    quota_reset_at = NULL,
-				    expires_at = $3,
-				    updated_at = NOW()
-				WHERE user_id = $4
-			`, dbPlanID, newQuotaTotal, newExpiresAt, dbUserID)
-		}
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memperbarui kuota langganan guru."})
+		if err := h.applySettlementTx(ctx, tx, dbTxID, dbUserID, dbPlanID, planQuotaEssays, planDurationDays, planIsAddon, effectivePaymentType); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memperbarui status transaksi dan kuota langganan guru."})
 			return
 		}
 
@@ -537,4 +824,3 @@ func (h *PaymentHandler) MidtransNotification(c *gin.Context) {
 		"new_status": mappedStatus,
 	})
 }
-

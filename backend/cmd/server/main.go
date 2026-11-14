@@ -56,7 +56,7 @@ func main() {
 	assignmentHandler := handlers.NewAssignmentHandler(pool, rdb, cfg)
 	modelHandler := handlers.NewModelHandler(pool, rdb, cfg)
 	paymentHandler := handlers.NewPaymentHandler(pool, cfg)
-	adminHandler := handlers.NewAdminHandler(pool, rdb, cfg)
+	adminHandler := handlers.NewAdminHandler(pool, rdb, cfg, paymentHandler)
 
 	api := r.Group("/api")
 	{
@@ -122,6 +122,7 @@ func main() {
 
 			guruGroup.POST("/payments/checkout", paymentHandler.Checkout)
 			guruGroup.GET("/payments/transactions", paymentHandler.ListGuruTransactions)
+			guruGroup.POST("/payments/reconcile", paymentHandler.ReconcileGuruTransactions)
 		}
 
 		adminGroup := api.Group("/admin")

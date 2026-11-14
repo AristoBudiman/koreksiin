@@ -1,3 +1,11 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="frontend/public/brand/koreksiin-logo-gelap.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="frontend/public/brand/koreksiin-logo.svg" />
+    <img alt="Koreksi.in Logo" src="frontend/public/brand/koreksiin-logo.svg" width="320" />
+  </picture>
+</p>
+
 # Koreksi.in — Platform SaaS Penilaian Esai Otomatis Berbasis AI
 
 **Koreksi.in** adalah platform *Software-as-a-Service* (SaaS) penilaian jawaban esai Bahasa Indonesia secara otomatis untuk membantu guru dan pengajar menilai ratusan jawaban siswa secara objektif, terstruktur per kriteria rubrik, dan konsisten. Seluruh pemrosesan kecerdasan buatan berjalan 100% secara lokal di atas CPU menggunakan model *open-source* tanpa ketergantungan pada layanan AI berbayar eksternal.
@@ -110,6 +118,9 @@ MIDTRANS_ENV=sandbox
 MIDTRANS_IS_PRODUCTION=false
 MIDTRANS_SERVER_KEY=SB-Mid-server-XXXXXXXXXXXXXXXXXXXXXXXX
 MIDTRANS_CLIENT_KEY=SB-Mid-client-XXXXXXXXXXXXXXXXXXXXXXXX
+
+# Opsional: URL publik tetap (kosongkan bila memakai Cloudflare Quick Tunnel otomatis)
+PUBLIC_BASE_URL=
 ```
 
 ---
@@ -153,30 +164,27 @@ Setelah container berstatus *Started* / *Healthy*, buka peramban dan akses:
 
 ---
 
-## 6. Konfigurasi Tunnel & Webhook Midtrans Sandbox
+## 6. Konfigurasi Tunnel & Webhook Midtrans Sandbox (Otomatis)
 
-Agar server Midtrans Sandbox dapat mengirimkan notifikasi status pembayaran (*webhook*) ke aplikasi lokal Anda:
+Koreksi.in dilengkapi mekanisme **pengiriman URL notifikasi webhook otomatis per transaksi** menggunakan header `X-Override-Notification` dari Midtrans Snap, sehingga **Anda tidak perlu mengubah atau memasukkan ulang Payment Notification URL secara manual di Dashboard Midtrans Sandbox setiap kali URL tunnel berubah**:
 
-1. Pastikan layanan dijalankan dengan profil `tunnel`:
+1. Jalankan aplikasi dengan menyertakan profil `tunnel`:
    ```bash
    docker compose --profile tunnel up -d
    ```
-2. Periksa log container `tunnel` untuk melihat alamat publik Cloudflare Quick Tunnel:
-   ```bash
-   docker compose logs tunnel
-   ```
-3. Cari baris URL yang berakhiran `.trycloudflare.com`, contohnya:
+2. Service `tunnel` (`cloudflare/cloudflared`) berjalan dengan endpoint metrik internal di jaringan Docker (`--metrics 0.0.0.0:2000 --url http://frontend:80`).
+3. Setiap kali guru membuat transaksi Snap baru (`POST /api/payments/checkout`), `backend` mengambil hostname tunnel aktif dari `http://tunnel:2000/quicktunnel` (di-*cache* selama 60 detik) dan mengirimkan header:
    ```text
-   https://contoh-subdomain-acak.trycloudflare.com
+   X-Override-Notification: https://<hostname>.trycloudflare.com/api/payments/midtrans/notification
    ```
-4. Gabungkan URL tersebut dengan path endpoint webhook Koreksi.in:
-   ```text
-   https://contoh-subdomain-acak.trycloudflare.com/api/payments/midtrans/notification
-   ```
-5. Masuk ke [Dashboard Midtrans Sandbox](https://dashboard.sandbox.midtrans.com/), buka menu **Settings -> Configuration**, lalu tempel URL lengkap di atas pada kolom **Payment Notification URL** dan klik **Save**.
-
-> [!WARNING]
-> **Penting**: URL `*.trycloudflare.com` dari Cloudflare Quick Tunnel bersifat dinamis dan **akan berubah setiap kali container `tunnel` dijalankan ulang (`restart` atau `down` lalu `up`)**. Setiap kali Anda menjalankan ulang container `tunnel`, ambil kembali URL baru dari `docker compose logs tunnel` dan perbarui kolom **Payment Notification URL** di Dashboard Midtrans Sandbox.
+   langsung ke Midtrans Snap.
+4. **Urutan Fallback URL Notifikasi (`ResolveNotificationURL`)**:
+   - **Prioritas 1 (`PUBLIC_BASE_URL`)**: Jika variabel `PUBLIC_BASE_URL` di `.env` diisi (misalnya saat di-*deploy* di domain permanen), backend memakai `<PUBLIC_BASE_URL>/api/payments/midtrans/notification`.
+   - **Prioritas 2 (Cloudflare Quick Tunnel Otomatis)**: Jika `PUBLIC_BASE_URL` kosong, backend mengambil URL aktif dari `http://tunnel:2000/quicktunnel`.
+   - **Prioritas 3 (Default Dashboard Midtrans)**: Jika container `tunnel` tidak sedang berjalan atau tidak dapat diakses, backend mencatat peringatan di log dan tidak mengirim header `X-Override-Notification` (sehingga Midtrans menggunakan URL bawaan di Dashboard Midtrans).
+5. **Rekonsiliasi Pembayaran Otomatis & Manual**:
+   - Apabila webhook sempat tertunda atau gagal masuk karena kendala jaringan, saat guru membuka halaman **Langganan & Kuota** (`/guru/langganan`) atau mengeklik tombol **Cek status pembayaran**, `backend` otomatis memeriksa transaksi yang masih `pending` ke **Midtrans Status API (`GET /v2/{order_id}/status`)** dan memproses perubahan status (`settlement`, penambahan kuota, dan masa aktif) secara idempoten.
+6. Anda juga dapat melihat **URL Notifikasi Webhook Midtrans Aktif** saat ini secara *read-only* di halaman **Dashboard Administrator** (`/admin`).
 
 ---
 
@@ -191,7 +199,7 @@ Agar server Midtrans Sandbox dapat mengirimkan notifikasi status pembayaran (*we
    `https://simulator.sandbox.midtrans.com/v2/qris/index`
 7. Tempel URL gambar QR pada kolom *QR Code Image URL*, klik **Scan QR**, lalu klik **Pay** hingga muncul keterangan pembayaran berhasil (**PAID**).
 8. Kembali ke halaman **Langganan & Kuota** (`/guru/langganan`):
-   - Setelah webhook diterima dan signature SHA512 tervalidasi, status transaksi otomatis berubah menjadi **Lunas (Settlement)**.
+   - Setelah webhook diterima melalui URL tunnel otomatis (`X-Override-Notification`) dan signature SHA512 tervalidasi (atau saat Anda mengeklik tombol **Cek status pembayaran**), status transaksi berubah menjadi **Lunas (Settlement)**.
    - Kuota esai dan masa aktif paket Anda langsung bertambah.
 
 ---
@@ -250,10 +258,10 @@ Berikut urutan langkah demo terpadu berdurasi sekitar **5–7 menit** untuk memp
    - **Korelasi Pearson 5-Fold CV** meningkat dari **0,8656** menjadi **0,9577**, memperbaiki penilaian kelompok jawaban "sebagian" agar sesuai standar koreksi guru.
 
 ### Langkah 6 — Pembayaran Paket via QRIS Midtrans Sandbox & Panel Admin (1,5 menit)
-1. Buka menu **Langganan & Kuota** (`/guru/langganan`), pilih **Paket Guru Bulanan (Rp 49.000)**, dan klik **Beli Paket Ini**.
+1. Buka menu **Langganan & Kuota** (`/guru/langganan`), pilih **Paket Guru Bulanan (Rp 49.000)**, dan klik **Beli Paket Ini** (backend otomatis menyertakan URL webhook tunnel aktif lewat `X-Override-Notification` tanpa perlu mengatur ulang URL di Dashboard Midtrans).
 2. Pilih metode **QRIS** pada Midtrans Snap, salin alamat gambar QR, lalu bayar melalui `https://simulator.sandbox.midtrans.com/v2/qris/index`.
-3. Tunjukkan bahwa status transaksi langsung berubah menjadi **Lunas (Settlement)** dan kuota bertambah **+300 esai** berkat verifikasi webhook Midtrans.
-4. Keluar dari akun guru dan masuk sebagai **Administrator** (`admin@koreksi.in`) di `/admin` untuk menampilkan statistik platform, manajemen status akun guru, log transaksi & verifikasi signature webhook Midtrans, pengaturan paket, serta pengaturan ambang AI.
+3. Tunjukkan bahwa status transaksi langsung berubah menjadi **Lunas (Settlement)** dan kuota bertambah **+300 esai** berkat verifikasi webhook Midtrans (atau klik tombol **Cek status pembayaran** untuk rekonsiliasi instan ke Midtrans Status API).
+4. Keluar dari akun guru dan masuk sebagai **Administrator** (`admin@koreksi.in`) di `/admin` untuk menampilkan statistik platform, informasi *read-only* **URL Notifikasi Webhook Midtrans Aktif**, manajemen status akun guru, log transaksi & verifikasi signature webhook Midtrans, pengaturan paket, serta pengaturan ambang AI.
 
 ---
 
@@ -261,9 +269,9 @@ Berikut urutan langkah demo terpadu berdurasi sekitar **5–7 menit** untuk memp
 
 1. **Penilaian Pertama Kali Memakan Waktu Lebih Lama**:
    - Saat pekerjaan penilaian pertama dijalankan, container `worker` mengunduh model `LazarusNLP/all-indobert-base-v4` (~440 MB) ke volume `koreksiin_hf_cache`. Pantau progres unduhan dengan `docker compose logs -f worker`. Penilaian berikutnya berjalan instan dalam hitungan detik.
-2. **Webhook Midtrans Tidak Masuk Setelah Membayar di Simulator**:
-   - Pastikan container `tunnel` sedang berjalan (`docker compose --profile tunnel up -d`).
-   - Cek URL aktif saat ini dengan `docker compose logs tunnel` dan pastikan **Payment Notification URL** di Dashboard Midtrans Sandbox sudah memakai URL terbaru beserta akhiran `/api/payments/midtrans/notification`.
+2. **Webhook Midtrans Terlambat atau Tidak Masuk Setelah Membayar di Simulator**:
+   - Klik tombol **Cek status pembayaran** di halaman **Langganan & Kuota** (`/guru/langganan`) atau muat ulang halaman tersebut — backend akan langsung memeriksa transaksi `pending` ke Midtrans Status API dan mengaktifkan paket serta kuota Anda secara idempoten.
+   - Pastikan container `tunnel` sedang berjalan (`docker compose --profile tunnel up -d`) dan periksa URL notifikasi aktif di halaman **Dashboard Administrator** (`/admin`).
 3. **Mereset Database Tanpa Menghapus Cache Model AI**:
    - Jangan gunakan `docker compose down -v` jika tidak ingin mengunduh ulang model Hugging Face. Cukup hapus volume PostgreSQL saja:
      ```bash

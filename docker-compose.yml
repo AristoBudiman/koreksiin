@@ -47,6 +47,8 @@ services:
       SCORING_QUEUE: ${SCORING_QUEUE:-queue:scoring}
       TRAINING_QUEUE: ${TRAINING_QUEUE:-queue:training}
       STORAGE_DIR: ${STORAGE_DIR:-/storage}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
+      TUNNEL_METRICS_URL: ${TUNNEL_METRICS_URL:-http://tunnel:2000/quicktunnel}
     volumes:
       - storage:/storage
     depends_on:
@@ -135,7 +137,7 @@ services:
     restart: unless-stopped
     profiles:
       - tunnel
-    command: tunnel --no-autoupdate --url http://frontend:80
+    command: tunnel --no-autoupdate --metrics 0.0.0.0:2000 --url http://frontend:80
     depends_on:
       - frontend
     networks:

@@ -5,15 +5,16 @@
       <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
         <div class="flex items-center gap-4 lg:gap-6 min-w-0">
           <RouterLink to="/guru" class="flex items-center gap-2.5 shrink-0">
-            <div class="w-9 h-9 rounded-lg bg-brand-500 flex items-center justify-center text-white shrink-0">
-              <PenTool class="w-5 h-5" />
-            </div>
-            <div class="whitespace-nowrap">
-              <span class="font-extrabold text-lg tracking-tight leading-none block">
+            <BrandLogo size="md" compactOnMobile />
+            <div class="sm:hidden whitespace-nowrap">
+              <span class="font-extrabold text-sm tracking-tight leading-none block">
                 Koreksi<span class="text-brand-700 dark:text-brand-400">.in</span>
               </span>
-              <span class="text-[11px] font-semibold text-ink-muted block">Ruang Kerja Guru</span>
+              <span class="text-[10px] font-semibold text-ink-muted block">Ruang Kerja Guru</span>
             </div>
+            <span class="hidden lg:inline-block px-2 py-0.5 rounded bg-ink-bg dark:bg-ink-darkBg border border-ink-line dark:border-ink-darkLine text-[11px] font-bold text-ink-muted whitespace-nowrap">
+              Ruang Kerja Guru
+            </span>
           </RouterLink>
 
           <nav class="hidden md:flex items-center gap-1 text-xs font-semibold shrink-0">
@@ -151,7 +152,6 @@
 <script setup>
 import { useRouter } from 'vue-router'
 import {
-  PenTool,
   LayoutDashboard,
   PlusCircle,
   Sliders,
@@ -161,6 +161,7 @@ import {
   Sun,
   Moon
 } from 'lucide-vue-next'
+import BrandLogo from '@/components/BrandLogo.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 import { useToastStore } from '@/stores/toast'

@@ -22,16 +22,9 @@
       </div>
 
       <div class="card-paper p-6 sm:p-8 space-y-6">
-        <div class="space-y-2">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2.5">
-              <div class="w-9 h-9 rounded-lg bg-brand-500 flex items-center justify-center text-white">
-                <PenTool class="w-5 h-5" />
-              </div>
-              <span class="font-extrabold text-lg">
-                Koreksi<span class="text-brand-700 dark:text-brand-400">.in</span>
-              </span>
-            </div>
+        <div class="space-y-2.5">
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <BrandLogo size="lg" />
             <span class="px-2.5 py-1 rounded bg-brand-50 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 text-xs font-bold">
               Gratis 35 Esai / Bulan
             </span>
@@ -149,7 +142,6 @@ import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   ArrowLeft,
-  PenTool,
   User,
   Mail,
   Building2,
@@ -162,6 +154,7 @@ import {
   Sun,
   Moon
 } from 'lucide-vue-next'
+import BrandLogo from '@/components/BrandLogo.vue'
 import HandDrawnUnderline from '@/components/HandDrawnUnderline.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'

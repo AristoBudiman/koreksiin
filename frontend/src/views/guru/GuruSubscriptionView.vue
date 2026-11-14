@@ -13,15 +13,26 @@
         </p>
       </div>
 
-      <button
-        type="button"
-        class="btn-secondary text-xs"
-        :disabled="refreshing"
-        @click="refreshAll"
-      >
-        <RefreshCw class="w-4 h-4" :class="refreshing ? 'animate-spin' : ''" />
-        <span>Muat Ulang Status Kuota</span>
-      </button>
+      <div class="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          class="btn-primary text-xs"
+          :disabled="reconciling || refreshing"
+          @click="handleReconcilePayments"
+        >
+          <RefreshCw class="w-4 h-4" :class="reconciling ? 'animate-spin' : ''" />
+          <span>Cek status pembayaran</span>
+        </button>
+        <button
+          type="button"
+          class="btn-secondary text-xs"
+          :disabled="refreshing || reconciling"
+          @click="refreshAll(false, true)"
+        >
+          <RefreshCw class="w-4 h-4" :class="refreshing ? 'animate-spin' : ''" />
+          <span>Muat Ulang Kuota</span>
+        </button>
+      </div>
     </div>
 
     <!-- Kartu Status Langganan Saat Ini -->
@@ -195,7 +206,7 @@
 
     <!-- Riwayat Transaksi Pembayaran Guru -->
     <div class="card-paper p-5 sm:p-6 space-y-4">
-      <div class="flex items-center justify-between gap-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 class="font-extrabold text-base flex items-center gap-2">
             <Receipt class="w-4 h-4 text-brand-700 dark:text-brand-400" />
@@ -208,9 +219,19 @@
               target="_blank"
               rel="noopener noreferrer"
               class="text-brand-700 dark:text-brand-400 underline font-semibold"
-            >Simulator QRIS Midtrans Sandbox (v2)</a>.
+            >Simulator QRIS Midtrans Sandbox (v2)</a>. Jika webhook terlambat masuk, klik <strong>Cek status pembayaran</strong>.
           </p>
         </div>
+
+        <button
+          type="button"
+          class="btn-secondary text-xs shrink-0 self-start sm:self-center"
+          :disabled="reconciling"
+          @click="handleReconcilePayments"
+        >
+          <RefreshCw class="w-3.5 h-3.5" :class="reconciling ? 'animate-spin' : ''" />
+          <span>Cek status pembayaran</span>
+        </button>
       </div>
 
       <div v-if="transactions.length === 0" class="p-8 text-center text-xs text-ink-muted border border-dashed border-ink-line dark:border-ink-darkLine rounded-xl">
@@ -319,6 +340,7 @@ const toastStore = useToastStore()
 const plans = ref([])
 const transactions = ref([])
 const refreshing = ref(false)
+const reconciling = ref(false)
 const checkingOutCode = ref('')
 const snapReady = ref(false)
 
@@ -393,20 +415,40 @@ async function loadSnapScript() {
   }
 }
 
-async function refreshAll(silent = false) {
+async function refreshAll(silent = false, reconcile = false) {
   if (!silent) refreshing.value = true
   try {
+    const txUrl = reconcile ? '/api/payments/transactions?reconcile=1' : '/api/payments/transactions'
     const [plansRes, txRes] = await Promise.all([
       apiFetch('/api/plans'),
-      apiFetch('/api/payments/transactions'),
-      authStore.refreshProfile()
+      apiFetch(txUrl)
     ])
+    await authStore.refreshProfile()
     plans.value = plansRes.plans || []
     transactions.value = txRes.transactions || []
   } catch (err) {
     if (!silent) toastStore.error(err.message || 'Gagal memuat data langganan.')
   } finally {
     if (!silent) refreshing.value = false
+  }
+}
+
+async function handleReconcilePayments() {
+  reconciling.value = true
+  try {
+    const res = await apiFetch('/api/payments/reconcile', {
+      method: 'POST'
+    })
+    await refreshAll(true, false)
+    if (res.settled_count > 0) {
+      toastStore.success(res.message)
+    } else {
+      toastStore.show(res.message || 'Status pembayaran telah diperiksa ke Midtrans.')
+    }
+  } catch (err) {
+    toastStore.error(err.message || 'Gagal mengecek status pembayaran ke Midtrans.')
+  } finally {
+    reconciling.value = false
   }
 }
 
@@ -453,11 +495,11 @@ async function handleCheckout(plan) {
 }
 
 onMounted(async () => {
-  await Promise.all([loadSnapScript(), refreshAll()])
+  await Promise.all([loadSnapScript(), refreshAll(false, true)])
   pollTimer = setInterval(() => {
     const hasPending = transactions.value.some((t) => t.status === 'pending')
     if (hasPending) {
-      refreshAll(true)
+      refreshAll(true, false)
     }
   }, 5000)
 })
