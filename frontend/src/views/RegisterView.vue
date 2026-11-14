@@ -24,8 +24,11 @@
       <div class="card-paper p-6 sm:p-8 space-y-6">
         <div class="space-y-2.5">
           <div class="flex items-center justify-between gap-2 flex-wrap">
-            <BrandLogo size="lg" />
-            <span class="px-2.5 py-1 rounded bg-brand-50 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 text-xs font-bold">
+            <div>
+              <BrandLogo size="lg" />
+              <p class="text-xs font-bold text-brand-700 dark:text-brand-400 mt-1">Cepat &amp; Konsisten</p>
+            </div>
+            <span class="px-2.5 py-1 rounded bg-brand-50 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 text-xs font-bold self-start">
               Gratis 35 Esai / Bulan
             </span>
           </div>

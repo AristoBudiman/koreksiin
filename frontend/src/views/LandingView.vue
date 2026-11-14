@@ -9,7 +9,7 @@
             <span class="font-extrabold text-sm tracking-tight leading-none">
               Koreksi<span class="text-brand-700 dark:text-brand-400">.in</span>
             </span>
-            <span class="text-[10px] font-medium text-ink-muted">Penilaian Esai Otomatis AI</span>
+            <span class="text-[10px] font-semibold text-ink-muted">Cepat &amp; Konsisten</span>
           </div>
         </RouterLink>
 
@@ -65,13 +65,13 @@
           <div class="lg:col-span-7 space-y-6">
             <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand-50 dark:bg-brand-900/30 border border-brand-200 dark:border-brand-800 text-brand-700 dark:text-brand-300 text-xs font-bold">
               <Sparkles class="w-3.5 h-3.5" />
-              <span>Ditenagai IndoBERT (all-indobert-base-v4) &amp; Adaptasi Gaya Penilaian Guru (LoRA)</span>
+              <span>Cepat &amp; Konsisten — Penilaian Esai Otomatis Berbasis AI</span>
             </div>
 
             <h1 class="text-3xl sm:text-5xl font-extrabold tracking-tight leading-[1.15]">
-              Koreksi Ratusan Esai Siswa Lebih Cepat, Objektif, dan
+              Koreksi Ratusan Esai Siswa Lebih
               <HandDrawnUnderline>
-                <span class="text-brand-700 dark:text-brand-400">Konsisten</span>
+                <span class="text-brand-700 dark:text-brand-400">Cepat &amp; Konsisten</span>
               </HandDrawnUnderline>
             </h1>
 
@@ -339,7 +339,7 @@
       <div class="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-ink-muted">
         <div class="flex items-center gap-3">
           <BrandLogo size="sm" />
-          <span>— Platform SaaS Penilaian Esai Otomatis Berbasis AI</span>
+          <span>— Cepat &amp; Konsisten</span>
         </div>
         <p>Proyek Mata Kuliah Kewirausahaan — Informatika UNS</p>
       </div>

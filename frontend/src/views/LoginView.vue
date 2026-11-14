@@ -23,8 +23,9 @@
 
       <div class="card-paper p-6 sm:p-8 space-y-6">
         <div class="space-y-2.5">
-          <div>
+          <div class="flex items-center justify-between gap-2 flex-wrap">
             <BrandLogo size="lg" />
+            <span class="text-xs font-bold text-brand-700 dark:text-brand-400">Cepat &amp; Konsisten</span>
           </div>
           <HandDrawnUnderline>
             <h1 class="text-2xl font-extrabold tracking-tight pt-1">Masuk ke Akun Anda</h1>
