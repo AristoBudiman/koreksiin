@@ -46,6 +46,51 @@
   transform: translateY(-4px);
 }
 
+/* Animasi Goresan Pena Guru (SVG Stroke Draw) */
+@keyframes svgStrokeDraw {
+  from {
+    stroke-dashoffset: 320;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.svg-draw-line {
+  stroke-dasharray: 240;
+  stroke-dashoffset: 0;
+  animation: svgStrokeDraw 0.65s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.svg-draw-circle {
+  stroke-dasharray: 320;
+  stroke-dashoffset: 0;
+  animation: svgStrokeDraw 0.75s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Animasi Stagger Kartu */
+@keyframes cardStaggerIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.stagger-grid > * {
+  animation: cardStaggerIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.stagger-grid > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-grid > *:nth-child(2) { animation-delay: 45ms; }
+.stagger-grid > *:nth-child(3) { animation-delay: 90ms; }
+.stagger-grid > *:nth-child(4) { animation-delay: 135ms; }
+.stagger-grid > *:nth-child(5) { animation-delay: 180ms; }
+.stagger-grid > *:nth-child(6) { animation-delay: 225ms; }
+
 /* Hormati prefers-reduced-motion */
 @media (prefers-reduced-motion: reduce) {
   *,

@@ -8,6 +8,7 @@
       aria-hidden="true"
     >
       <path
+        class="svg-draw-circle"
         d="M15 12C45 2 108 5 114 29C120 53 72 58 34 55C6 52 2 33 12 17C19 6 42 5 64 7"
         stroke="currentColor"
         stroke-width="2.75"

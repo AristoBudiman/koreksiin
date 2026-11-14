@@ -57,7 +57,7 @@
             <div class="flex items-baseline justify-end gap-1.5 mt-0.5">
               <ScoreCircleHighlight>
                 <span class="text-2xl sm:text-3xl font-extrabold text-brand-700 dark:text-brand-400 num-tabular">
-                  {{ sub?.quota_remaining ?? 0 }}
+                  <CountUpNumber :value="sub?.quota_remaining ?? 0" :decimals="0" />
                 </span>
               </ScoreCircleHighlight>
               <span class="text-xs text-ink-muted num-tabular">
@@ -308,6 +308,7 @@ import {
 } from 'lucide-vue-next'
 import HandDrawnUnderline from '@/components/HandDrawnUnderline.vue'
 import ScoreCircleHighlight from '@/components/ScoreCircleHighlight.vue'
+import CountUpNumber from '@/components/CountUpNumber.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 import { apiFetch } from '@/utils/api'

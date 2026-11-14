@@ -44,16 +44,16 @@
           <template v-else>
             <RouterLink
               to="/masuk"
-              class="btn-secondary hidden sm:inline-flex"
+              class="btn-secondary px-3 py-2 sm:px-4 sm:py-2.5 text-xs sm:text-sm"
             >
               Masuk
             </RouterLink>
             <RouterLink
               to="/daftar"
-              class="btn-primary"
+              class="btn-primary px-3.5 py-2 sm:px-5 sm:py-2.5 text-xs sm:text-sm"
             >
               <span>Daftar Guru</span>
-              <ArrowRight class="w-4 h-4" />
+              <ArrowRight class="w-4 h-4 hidden sm:inline" />
             </RouterLink>
           </template>
         </div>
@@ -122,7 +122,9 @@
                 <div class="text-right">
                   <span class="text-[11px] uppercase tracking-wider font-bold text-ink-muted block">Nilai Akhir</span>
                   <ScoreCircleHighlight>
-                    <span class="text-2xl sm:text-3xl font-extrabold text-brand-700 dark:text-brand-400">86.5</span>
+                    <span class="text-2xl sm:text-3xl font-extrabold text-brand-700 dark:text-brand-400">
+                      <CountUpNumber :value="86.5" :decimals="1" />
+                    </span>
                   </ScoreCircleHighlight>
                 </div>
               </div>
@@ -186,7 +188,7 @@
             </p>
           </div>
 
-          <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 stagger-grid">
             <div class="card-paper p-5 space-y-3 hover:shadow-paperHover">
               <div class="w-10 h-10 rounded-lg bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-400 flex items-center justify-center">
                 <ListChecks class="w-5 h-5" />
@@ -239,7 +241,7 @@
             </HandDrawnUnderline>
           </div>
 
-          <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 stagger-grid">
             <div v-for="(step, idx) in steps" :key="idx" class="card-paper p-5 space-y-2.5">
               <div class="flex items-center justify-between">
                 <span class="text-xs font-extrabold uppercase tracking-wider text-brand-700 dark:text-brand-400">
@@ -268,7 +270,7 @@
             </div>
           </div>
 
-          <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 stagger-grid">
             <div
               v-for="plan in plans"
               :key="plan.code"
@@ -373,6 +375,7 @@ import {
 } from 'lucide-vue-next'
 import HandDrawnUnderline from '@/components/HandDrawnUnderline.vue'
 import ScoreCircleHighlight from '@/components/ScoreCircleHighlight.vue'
+import CountUpNumber from '@/components/CountUpNumber.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 import { apiFetch } from '@/utils/api'

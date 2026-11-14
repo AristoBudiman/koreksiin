@@ -29,7 +29,7 @@
     </div>
 
     <!-- Kartu Status Langganan & Statistik -->
-    <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+    <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 stagger-grid">
       <div class="card-paper p-5 space-y-2">
         <div class="flex items-center justify-between text-xs text-ink-muted font-bold uppercase tracking-wider">
           <span>Paket Aktif</span>
@@ -57,7 +57,7 @@
         <div class="flex items-baseline gap-2">
           <ScoreCircleHighlight>
             <span class="text-2xl font-extrabold text-brand-700 dark:text-brand-400">
-              {{ authStore.user?.subscription?.quota_remaining ?? 0 }}
+              <CountUpNumber :value="authStore.user?.subscription?.quota_remaining ?? 0" :decimals="0" />
             </span>
           </ScoreCircleHighlight>
           <span class="text-xs text-ink-muted num-tabular">
@@ -71,7 +71,9 @@
           <span>Total Tugas</span>
           <BookOpen class="w-4 h-4 text-brand-700 dark:text-brand-400" />
         </div>
-        <p class="text-2xl font-extrabold num-tabular">{{ assignments.length }}</p>
+        <p class="text-2xl font-extrabold num-tabular">
+          <CountUpNumber :value="assignments.length" :decimals="0" />
+        </p>
         <p class="text-xs text-ink-muted">Tugas esai beserta rubrik</p>
       </div>
 
@@ -80,7 +82,9 @@
           <span>Esai Dinilai</span>
           <FileCheck2 class="w-4 h-4 text-criteria-terpenuhi" />
         </div>
-        <p class="text-2xl font-extrabold num-tabular">{{ stats.total_scored }}</p>
+        <p class="text-2xl font-extrabold num-tabular">
+          <CountUpNumber :value="stats.total_scored" :decimals="0" />
+        </p>
         <p class="text-xs text-ink-muted num-tabular">dari {{ stats.total_submissions }} total jawaban</p>
       </div>
     </div>
@@ -118,7 +122,7 @@
       </div>
 
       <!-- Kartu Tugas -->
-      <div v-else class="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div v-else class="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 stagger-grid">
         <div
           v-for="item in assignments"
           :key="item.id"
@@ -205,6 +209,7 @@ import {
 } from 'lucide-vue-next'
 import HandDrawnUnderline from '@/components/HandDrawnUnderline.vue'
 import ScoreCircleHighlight from '@/components/ScoreCircleHighlight.vue'
+import CountUpNumber from '@/components/CountUpNumber.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 import { apiFetch } from '@/utils/api'
